@@ -8,9 +8,12 @@ $id      = (int)($_POST['id'] ?? 0);
 $filesJson = $_POST['files'] ?? '';
 $extraFiles = $filesJson ? json_decode($filesJson, true) : [];
 
+$entry = trim($_POST['entry'] ?? 'main.typ', '/');
+if ($entry === '' || strpos($entry, '..') !== false) $entry = 'main.typ';
+
 $uid    = uniqid('', true);
 $tmpDir = "/tmp/typst_proj_{$id}_{$uid}";
-$inFile  = "$tmpDir/main.typ";
+$inFile  = "$tmpDir/$entry";
 $outFile = "$tmpDir/output.pdf";
 
 register_shutdown_function(function() use ($tmpDir) {
@@ -27,6 +30,8 @@ register_shutdown_function(function() use ($tmpDir) {
 });
 
 mkdir($tmpDir, 0700, true);
+$inDir = dirname($inFile);
+if ($inDir !== $tmpDir) mkdir($inDir, 0700, true);
 file_put_contents($inFile, $content);
 
 // Copy uploaded images into the temp dir so Typst can find them (preserving subfolders)
@@ -48,7 +53,7 @@ if (is_dir($imgDir)) {
 if (is_array($extraFiles)) {
     foreach ($extraFiles as $f) {
         $name = trim($f['filename'] ?? '', '/');
-        if ($name === '' || $name === 'main.typ') continue;
+        if ($name === '' || $name === $entry) continue;
         if (strpos($name, '..') !== false) continue; // block traversal
         $dest    = "$tmpDir/$name";
         $destDir = dirname($dest);

@@ -155,6 +155,20 @@ button:focus { outline: 0; }
 }
 .user-menu-item:hover { background: var(--hover); color: var(--text); }
 .user-menu-item i { font-size: 16px; }
+
+/* ── Doc settings panel ── */
+.doc-settings-select {
+    width: 100%;
+    background: var(--input-bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+.doc-settings-select:focus { outline: none; border-color: var(--colorTheme); }
 .topbar-icon-btn {
     background: none;
     border: none;

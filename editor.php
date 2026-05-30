@@ -126,11 +126,6 @@ html, body { height: 100%; overflow: hidden; }
            value="<?= htmlspecialchars($doc['title']) ?>"
            onblur="saveDoc()" placeholder="Document title">
     <span class="save-indicator" id="saveIndicator"></span>
-    <label class="live-switch" title="Toggle live preview">
-        <input type="checkbox" id="liveSwitchInput">
-        <span class="live-switch-track"></span>
-        <span class="live-switch-label">Live</span>
-    </label>
     <button class="compile-btn" id="compileBtn" onclick="compileDoc()">
         <i class="ri-play-fill"></i>Compile
     </button>
@@ -155,11 +150,9 @@ html, body { height: 100%; overflow: hidden; }
         <button class="activity-btn" id="actStats" onclick="switchPanel('stats')" title="Document stats">
             <i class="ri-bar-chart-2-line"></i>
         </button>
-        <a href="settings.php" style="margin-top:auto;display:flex" title="Settings">
-            <button class="activity-btn">
-                <i class="ri-settings-4-line"></i>
-            </button>
-        </a>
+        <button class="activity-btn" id="actDocSettings" onclick="switchPanel('docSettings')" style="margin-top:auto" title="Document settings">
+            <i class="ri-settings-4-line"></i>
+        </button>
     </div>
 
     <!-- Side panel -->
@@ -189,6 +182,28 @@ html, body { height: 100%; overflow: hidden; }
             <div class="file-list" id="fileList"></div>
         </div>
 
+        <!-- Doc settings panel -->
+        <div class="panel-pane" id="panelDocSettings" style="display:none">
+            <div class="panel-header">
+                <span class="panel-title">Document Settings</span>
+            </div>
+            <div style="padding:12px 14px;display:flex;flex-direction:column;gap:20px">
+                <div>
+                    <div class="sidebar-label" style="margin-bottom:8px">Entry file</div>
+                    <select id="entryFileSelect" class="doc-settings-select" onchange="setEntryFile(this.value)"></select>
+                    <p style="font-size:11px;color:var(--grayText);margin-top:8px;line-height:1.5">The .typ file the compiler starts from.</p>
+                </div>
+                <div>
+                    <div class="sidebar-label" style="margin-bottom:10px">Live compile</div>
+                    <label class="live-switch">
+                        <input type="checkbox" id="liveSwitchInput">
+                        <span class="live-switch-track"></span>
+                        <span class="live-switch-label">Compile on every change</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
         <!-- Stats panel -->
         <div class="panel-pane" id="panelStats" style="display:none">
             <div class="sidebar-section" style="border-top:none">
@@ -207,6 +222,15 @@ html, body { height: 100%; overflow: hidden; }
                 </div>
                 <div class="sidebar-info-row">
                     <span>Words</span><span id="sidebarWords">0</span>
+                </div>
+            </div>
+            <div class="sidebar-section" id="selectionSection">
+                <div class="sidebar-label">Selection</div>
+                <div class="sidebar-info-row">
+                    <span>Words</span><span id="sidebarSelWords">0</span>
+                </div>
+                <div class="sidebar-info-row">
+                    <span>Characters</span><span id="sidebarSelChars">0</span>
                 </div>
             </div>
             <div class="sidebar-section">
@@ -646,6 +670,7 @@ var isSaving            = false;
 var isDirty             = false;
 var lastCompiledContent = null;
 var liveMode            = localStorage.getItem('typst_live') === '1';
+var entryFile           = localStorage.getItem('typst_entry_' + DOC_ID) || 'main.typ';
 
 // Multi-file state
 var activeFile       = { id: null, filename: 'main.typ' }; // null = main doc
@@ -677,13 +702,40 @@ function switchPanel(name) {
     } else {
         document.getElementById('panelFiles').style.display = name === 'files' ? 'flex' : 'none';
         document.getElementById('panelStats').style.display = name === 'stats' ? 'flex' : 'none';
+        document.getElementById('panelDocSettings').style.display = name === 'docSettings' ? 'flex' : 'none';
         panel.classList.remove('collapsed');
         panelVisible = true;
         activePanel = name;
+        if (name === 'docSettings') renderDocSettings();
     }
     document.getElementById('actFiles').classList.toggle('active', activePanel === 'files' && panelVisible);
     document.getElementById('actStats').classList.toggle('active', activePanel === 'stats' && panelVisible);
+    document.getElementById('actDocSettings').classList.toggle('active', activePanel === 'docSettings' && panelVisible);
     editor.refresh();
+}
+
+function setEntryFile(val) {
+    entryFile = val;
+    localStorage.setItem('typst_entry_' + DOC_ID, val);
+}
+
+function renderDocSettings() {
+    var select = document.getElementById('entryFileSelect');
+    var typFiles = ['main.typ'].concat(
+        extraFiles
+            .filter(function(f) { return /\.typ$/i.test(f.filename); })
+            .map(function(f) { return f.filename; })
+    );
+    // ensure entryFile is still valid, otherwise reset
+    if (typFiles.indexOf(entryFile) === -1) { entryFile = 'main.typ'; localStorage.removeItem('typst_entry_' + DOC_ID); }
+    select.innerHTML = '';
+    typFiles.forEach(function(name) {
+        var opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        if (name === entryFile) opt.selected = true;
+        select.appendChild(opt);
+    });
 }
 
 // ── File list ─────────────────────────────────────────────────────────────────
@@ -1364,11 +1416,61 @@ function batchSaveTextFile(filename, content, onComplete) {
 }
 
 // ── Sidebar stats ─────────────────────────────────────────────────────────────
+function stripTypstMarkup(src) {
+    // Raw blocks (```...```) and inline code (`...`) — not prose
+    src = src.replace(/```[\s\S]*?```/g, ' ');
+    src = src.replace(/`[^`\n]+`/g, ' ');
+    // Block and line comments
+    src = src.replace(/\/\*[\s\S]*?\*\//g, ' ');
+    src = src.replace(/\/\/[^\n]*/g, '');
+    // Math ($$ ... $$ and $ ... $)
+    src = src.replace(/\$\$[\s\S]*?\$\$/g, ' ');
+    src = src.replace(/\$[^$\n]+\$/g, ' ');
+    // Code blocks #{ ... }
+    src = src.replace(/#\{[^}]*\}/g, ' ');
+    // Full-line code directives
+    src = src.replace(/^[ \t]*#(let|import|include|show|set|if|else|for|while|return|break|continue)\b[^\n]*/gm, '');
+    // #func(args)[content] → keep content; #func(args) or bare #word → remove
+    src = src.replace(/#[\w.]+(?:\([^)]*\))?\[([^\]]*)\]/g, '$1');
+    src = src.replace(/#[\w.]+(?:\([^)]*\))?/g, '');
+    // Heading markers at line start (= == ===)
+    src = src.replace(/^=+\s*/gm, '');
+    // List/enum markers at line start
+    src = src.replace(/^[ \t]*[-+]\s+/gm, '');
+    src = src.replace(/^[ \t]*\d+\.\s+/gm, '');
+    // @references and <labels>
+    src = src.replace(/@[\w:-]+/g, '');
+    src = src.replace(/<[\w:-]+>/g, '');
+    // Leftover content-block brackets
+    src = src.replace(/[[\]]/g, ' ');
+    // Bold/italic markers (* _ **)
+    src = src.replace(/[*_]+/g, ' ');
+    // URLs
+    src = src.replace(/https?:\/\/\S+/g, ' ');
+    return src;
+}
+
 function updateStats() {
     var val = editor.getValue();
-    document.getElementById('sidebarChars').textContent = val.length;
+    var prose = stripTypstMarkup(val);
+    var words = prose.trim() ? prose.trim().split(/\s+/).filter(function(w) { return w.length > 0; }).length : 0;
+    var chars = prose.replace(/\s/g, '').length;
+    document.getElementById('sidebarChars').textContent = chars;
     document.getElementById('sidebarLines').textContent = editor.lineCount();
-    document.getElementById('sidebarWords').textContent = val.trim() ? val.trim().split(/\s+/).length : 0;
+    document.getElementById('sidebarWords').textContent = words;
+    updateSelectionStats();
+}
+
+function updateSelectionStats() {
+    var sel = editor.getSelection();
+    var words = 0, chars = 0;
+    if (sel) {
+        var prose = stripTypstMarkup(sel);
+        words = prose.trim() ? prose.trim().split(/\s+/).filter(function(w) { return w.length > 0; }).length : 0;
+        chars = prose.replace(/\s/g, '').length;
+    }
+    document.getElementById('sidebarSelWords').textContent = words;
+    document.getElementById('sidebarSelChars').textContent = chars;
 }
 editor.on('change', function() {
     if (activeFile.id === null) mainContent = editor.getValue();
@@ -1387,6 +1489,7 @@ editor.on('change', function() {
         }, 1500);
     }
 });
+editor.on('cursorActivity', updateSelectionStats);
 updateStats();
 loadFileList();
 loadImageList();
@@ -1553,8 +1656,24 @@ function compileDoc() {
         document.getElementById('liveProgress').classList.remove('running');
         showError("Network error");
     };
-    var body = 'id=' + DOC_ID + '&content=' + encodeURIComponent(mainContent);
-    if (allFiles.length > 0) body += '&files=' + encodeURIComponent(JSON.stringify(allFiles));
+    var payload_content, payload_files;
+    if (entryFile === 'main.typ') {
+        payload_content = mainContent;
+        payload_files   = allFiles;
+    } else {
+        var entryObj = extraFiles.find(function(f) { return f.filename === entryFile; });
+        if (!entryObj) {
+            payload_content = mainContent;
+            payload_files   = allFiles;
+        } else {
+            payload_content = fileCache[entryObj.id] !== undefined ? fileCache[entryObj.id] : '';
+            payload_files   = [{filename: 'main.typ', content: mainContent}].concat(
+                allFiles.filter(function(f) { return f.filename !== entryFile; })
+            );
+        }
+    }
+    var body = 'id=' + DOC_ID + '&content=' + encodeURIComponent(payload_content) + '&entry=' + encodeURIComponent(entryFile);
+    if (payload_files.length > 0) body += '&files=' + encodeURIComponent(JSON.stringify(payload_files));
     xhr.send(body);
 }
 
