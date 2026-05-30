@@ -26,6 +26,7 @@ $themeClass = $isDark ? "dark" : "light";
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
 <link rel="stylesheet" href="css/dark_mode.php">
+<style>body.dark{background:#141414}body.light{background:#f5f5f5}</style>
 </head>
 <body class="<?= $themeClass ?>">
 
@@ -35,11 +36,14 @@ $themeClass = $isDark ? "dark" : "light";
     <button class="topbar-btn" onclick="newDoc()">
         <i class="ri-add-line" style="vertical-align:middle;margin-right:4px"></i>New Document
     </button>
-    <span class="topbar-username"><?= htmlspecialchars($user['name']) ?></span>
-    <a href="settings.php"><button class="topbar-icon-btn" title="Settings"><i class="ri-settings-4-line"></i></button></a>
-    <a href="auth/logout.php">
-        <button class="topbar-btn secondary" style="padding:6px 14px;font-size:13px">Logout</button>
-    </a>
+    <div class="user-avatar-wrap">
+        <button class="user-avatar" onclick="toggleUserMenu(event)"><?= strtoupper(mb_substr($user['name'], 0, 1)) ?></button>
+        <div class="user-menu" id="userMenu">
+            <div class="user-menu-header"><?= htmlspecialchars($user['name']) ?></div>
+            <a href="settings.php" class="user-menu-item"><i class="ri-settings-4-line"></i>Settings</a>
+            <a href="auth/logout.php" class="user-menu-item"><i class="ri-logout-box-r-line"></i>Logout</a>
+        </div>
+    </div>
 </div>
 
 <div class="library-body">
@@ -95,6 +99,15 @@ function newDoc() {
 }
 
 function openDoc(id) { window.location.href = 'editor.php?id=' + id; }
+
+function toggleUserMenu(e) {
+    e.stopPropagation();
+    document.getElementById('userMenu').classList.toggle('open');
+}
+document.addEventListener('click', function() {
+    var m = document.getElementById('userMenu');
+    if (m) m.classList.remove('open');
+});
 
 function deleteDoc(e, id) {
     e.stopPropagation();

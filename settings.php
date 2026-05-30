@@ -14,6 +14,7 @@ $themeClass = $isDark ? "dark" : "light";
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
 <link rel="stylesheet" href="css/dark_mode.php">
+<style>body.dark{background:#141414}body.light{background:#f5f5f5}</style>
 </head>
 <body class="<?= $themeClass ?>">
 
@@ -22,7 +23,13 @@ $themeClass = $isDark ? "dark" : "light";
         <i class="ri-arrow-left-s-line"></i>
     </button>
     <span class="topbar-title">Settings</span>
-    <span class="topbar-username"><?= htmlspecialchars($user['name']) ?></span>
+    <div class="user-avatar-wrap">
+        <button class="user-avatar" onclick="toggleUserMenu(event)"><?= strtoupper(mb_substr($user['name'], 0, 1)) ?></button>
+        <div class="user-menu" id="userMenu">
+            <div class="user-menu-header"><?= htmlspecialchars($user['name']) ?></div>
+            <a href="auth/logout.php" class="user-menu-item"><i class="ri-logout-box-r-line"></i>Logout</a>
+        </div>
+    </div>
 </div>
 
 <div class="settings-body">
@@ -58,6 +65,15 @@ function goBack() {
         location.href = 'index.php';
     }
 }
+
+function toggleUserMenu(e) {
+    e.stopPropagation();
+    document.getElementById('userMenu').classList.toggle('open');
+}
+document.addEventListener('click', function() {
+    var m = document.getElementById('userMenu');
+    if (m) m.classList.remove('open');
+});
 
 function setTheme(isLight) {
     var val = isLight ? '1' : '0';

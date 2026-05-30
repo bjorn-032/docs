@@ -29,6 +29,7 @@ $cmTheme = $isDark ? "dracula" : "default";
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
 <link rel="stylesheet" href="css/dark_mode.php">
+<style>body.dark{background:#141414}body.light{background:#f5f5f5}</style>
 <!-- CodeMirror 5 -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/codemirror.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/theme/dracula.min.css">
@@ -125,7 +126,6 @@ html, body { height: 100%; overflow: hidden; }
            value="<?= htmlspecialchars($doc['title']) ?>"
            onblur="saveDoc()" placeholder="Document title">
     <span class="save-indicator" id="saveIndicator"></span>
-    <span class="topbar-username" style="font-size:13px;color:var(--grayText)"><?= htmlspecialchars($user['name']) ?></span>
     <label class="live-switch" title="Toggle live preview">
         <input type="checkbox" id="liveSwitchInput">
         <span class="live-switch-track"></span>
@@ -134,6 +134,14 @@ html, body { height: 100%; overflow: hidden; }
     <button class="compile-btn" id="compileBtn" onclick="compileDoc()">
         <i class="ri-play-fill"></i>Compile
     </button>
+    <div class="user-avatar-wrap">
+        <button class="user-avatar" onclick="toggleUserMenu(event)"><?= strtoupper(mb_substr($user['name'], 0, 1)) ?></button>
+        <div class="user-menu" id="userMenu">
+            <div class="user-menu-header"><?= htmlspecialchars($user['name']) ?></div>
+            <a href="settings.php" class="user-menu-item"><i class="ri-settings-4-line"></i>Settings</a>
+            <a href="auth/logout.php" class="user-menu-item"><i class="ri-logout-box-r-line"></i>Logout</a>
+        </div>
+    </div>
 </div>
 
 <!-- Editor shell -->
@@ -1624,6 +1632,15 @@ document.head.appendChild(style);
 // Warn on unload if dirty
 window.addEventListener('beforeunload', function(e) {
     if (isDirty) { e.preventDefault(); e.returnValue = ''; }
+});
+
+function toggleUserMenu(e) {
+    e.stopPropagation();
+    document.getElementById('userMenu').classList.toggle('open');
+}
+document.addEventListener('click', function() {
+    var m = document.getElementById('userMenu');
+    if (m) m.classList.remove('open');
 });
 </script>
 </body>

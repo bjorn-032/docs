@@ -98,6 +98,63 @@ button:focus { outline: 0; }
     font-size: 14px;
     color: var(--grayText);
 }
+/* ── User avatar + dropdown ── */
+.user-avatar-wrap {
+    position: relative;
+    flex-shrink: 0;
+}
+.user-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--coninfo);
+    color: var(--lighterText);
+    border: 1.5px solid var(--border);
+    font-size: 14px;
+    font-weight: 600;
+    font-family: 'BricolageGrotesque', 'Poppins', sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+}
+.user-avatar:hover { background: var(--hover); border-color: var(--grayText); }
+.user-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    min-width: 180px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.25);
+    z-index: 200;
+    overflow: hidden;
+}
+.user-menu.open { display: block; }
+.user-menu-header {
+    padding: 12px 14px 10px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.user-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 9px 14px;
+    font-size: 13px;
+    color: var(--lighterText);
+    transition: background .12s;
+}
+.user-menu-item:hover { background: var(--hover); color: var(--text); }
+.user-menu-item i { font-size: 16px; }
 .topbar-icon-btn {
     background: none;
     border: none;
