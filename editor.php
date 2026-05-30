@@ -67,6 +67,7 @@ html, body { height: 100%; overflow: hidden; }
 .light .CodeMirror-hint  { color: #212121; }
 .light .hint-typst { color: #2e7d32; }
 .light .hint-cite  { color: #0277bd; }
+#pdfDownloadBtn:hover { background: var(--hover) !important; color: var(--text) !important; }
 .editor-shell { height: calc(100vh - 56px); display: flex; }
 .editor-pane { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 .editor-pane .CodeMirror { flex: 1; height: 100%; font-size: 14px; line-height: 1.7; font-family: "JetBrains Mono", monospace; }
@@ -194,11 +195,11 @@ html, body { height: 100%; overflow: hidden; }
                     <p style="font-size:11px;color:var(--grayText);margin-top:8px;line-height:1.5">The .typ file the compiler starts from.</p>
                 </div>
                 <div>
-                    <div class="sidebar-label" style="margin-bottom:10px">Live compile</div>
+                    <div class="sidebar-label" style="margin-bottom:10px">Autocompile</div>
                     <label class="live-switch">
                         <input type="checkbox" id="liveSwitchInput">
                         <span class="live-switch-track"></span>
-                        <span class="live-switch-label">Compile on every change</span>
+                        <span class="live-switch-label">Autocompile on every change</span>
                     </label>
                 </div>
             </div>
@@ -259,6 +260,9 @@ html, body { height: 100%; overflow: hidden; }
         <div class="preview-toolbar">
             <i class="ri-file-pdf-line" style="font-size:16px"></i>
             <span id="previewLabel">No output yet — click Compile</span>
+            <button id="pdfDownloadBtn" onclick="downloadPDF()" title="Download PDF" style="display:none;margin-left:auto;background:none;border:none;color:var(--grayText);cursor:pointer;display:none;align-items:center;gap:4px;font-size:12px;padding:2px 6px;border-radius:5px">
+                <i class="ri-download-2-line" style="font-size:15px"></i>
+            </button>
         </div>
         <div class="live-progress" id="liveProgress"></div>
         <div class="preview-iframe-wrap" id="previewWrap">
@@ -1696,6 +1700,19 @@ function showPDF(b64) {
     }
     iframe._blobUrl = url;
     iframe.src = url;
+    var btn = document.getElementById('pdfDownloadBtn');
+    btn.style.display = 'flex';
+    btn._blobUrl = url;
+}
+
+function downloadPDF() {
+    var btn = document.getElementById('pdfDownloadBtn');
+    if (!btn._blobUrl) return;
+    var title = document.getElementById('docTitle').value.trim() || 'document';
+    var a = document.createElement('a');
+    a.href = btn._blobUrl;
+    a.download = title + '.pdf';
+    a.click();
 }
 
 function showError(msg) {
