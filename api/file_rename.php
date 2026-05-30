@@ -11,7 +11,7 @@ $doc_id  = (int)($_POST['document_id'] ?? 0);
 $newname = trim($_POST['filename'] ?? '', '/');
 
 if (!$newname) { echo json_encode(['ok'=>false,'error'=>'Filename required']); exit; }
-if (!preg_match('/^[a-zA-Z0-9._\-]+(\/[a-zA-Z0-9._\-]+)*\.(typ|bib)$/i', $newname)) {
+if (!preg_match('/^[a-zA-Z0-9._\-]+(\/[a-zA-Z0-9._\-]+)*$/', $newname)) {
     echo json_encode(['ok'=>false,'error'=>'Invalid filename']); exit;
 }
 

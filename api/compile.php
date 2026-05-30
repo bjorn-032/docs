@@ -57,7 +57,22 @@ if (is_array($extraFiles)) {
     }
 }
 
-$cmd    = escapeshellcmd("/bin/typst") . " compile " . escapeshellarg($inFile) . " " . escapeshellarg($outFile) . " 2>&1";
+// Collect every directory in the temp tree that contains a font file
+$font_exts = ['ttf','otf','woff','woff2','eot'];
+$font_dirs = [$tmpDir => true];
+$iter2 = new RecursiveIteratorIterator(
+    new RecursiveDirectoryIterator($tmpDir, RecursiveDirectoryIterator::SKIP_DOTS)
+);
+foreach ($iter2 as $f2) {
+    if ($f2->isFile() && in_array(strtolower($f2->getExtension()), $font_exts)) {
+        $font_dirs[dirname($f2->getPathname())] = true;
+    }
+}
+$font_path_args = implode('', array_map(function($d) {
+    return ' --font-path ' . escapeshellarg($d);
+}, array_keys($font_dirs)));
+
+$cmd    = escapeshellcmd("/bin/typst") . " compile " . escapeshellarg($inFile) . " " . escapeshellarg($outFile) . $font_path_args . " 2>&1";
 $output = [];
 $exit   = 0;
 exec($cmd, $output, $exit);

@@ -23,18 +23,24 @@ if (!$file || $file['error'] !== UPLOAD_ERR_OK) {
     echo json_encode(['ok'=>false,'error'=>'Upload error']); exit;
 }
 
-$allowed_types = ['image/png','image/jpeg','image/gif','image/webp','image/svg+xml','application/pdf'];
-if (!in_array($file['type'], $allowed_types)) {
-    echo json_encode(['ok'=>false,'error'=>'File type not allowed']); exit;
-}
-
-// If a validated relative path is provided (batch/folder uploads), use it;
-// otherwise fall back to sanitising the file's own name.
+// Resolve filename first (needed for extension-based type check)
 $rel = ltrim($_POST['path'] ?? '', '/');
 if ($rel && strpos($rel, '..') === false && preg_match('/^[a-zA-Z0-9._\-]+(\/[a-zA-Z0-9._\-]+)*$/', $rel)) {
     $filename = $rel;
 } else {
     $filename = preg_replace('/[^a-zA-Z0-9._\-]/', '_', basename($file['name']));
+}
+
+$allowed_types = [
+    'image/png','image/jpeg','image/gif','image/webp','image/svg+xml','application/pdf',
+    'font/ttf','font/otf','font/woff','font/woff2',
+    'application/font-woff','application/x-font-ttf','application/x-font-opentype',
+    'application/vnd.ms-fontobject',
+];
+$font_exts = ['ttf','otf','woff','woff2','eot'];
+$file_ext  = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+if (!in_array($file['type'], $allowed_types) && !in_array($file_ext, $font_exts)) {
+    echo json_encode(['ok'=>false,'error'=>'File type not allowed']); exit;
 }
 
 $dir = __DIR__ . "/../uploads/{$doc_id}";

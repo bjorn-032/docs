@@ -1097,13 +1097,14 @@ function makeImageItem(filename, depth) {
     var div = document.createElement('div');
     div.className = 'file-item';
     div.style.paddingLeft = (12 + depth * 16) + 'px';
+    var isFont = /\.(ttf|otf|woff2?|eot)$/i.test(filename);
     div.innerHTML =
-        '<i class="ri-image-line" style="color:#f48fb1"></i>' +
+        '<i class="' + (isFont ? 'ri-font-size' : 'ri-image-line') + '" style="color:' + (isFont ? '#ce93d8' : '#f48fb1') + '"></i>' +
         '<span class="file-name">' + escHtml(displayName) + '</span>';
     div.onclick = function(e) {
         if (e.target.closest('.file-del')) return;
         if (e.detail >= 2) return;
-        openLightbox(filename);
+        if (!isFont) openLightbox(filename);
     };
     div.addEventListener('dblclick', function(e) {
         e.stopPropagation();
@@ -1248,7 +1249,7 @@ function handleFileUpload(input) {
     }
 
     items.forEach(function(item) {
-        if (/\.(png|jpe?g|gif|webp|svg|pdf)$/i.test(item.filename)) {
+        if (/\.(png|jpe?g|gif|webp|svg|pdf|ttf|otf|woff2?|eot)$/i.test(item.filename)) {
             var fd = new FormData();
             fd.append('document_id', DOC_ID);
             fd.append('file', item.file, item.filename.split('/').pop());
@@ -1269,7 +1270,7 @@ function handleFileUpload(input) {
 }
 
 function handleSingleFileUpload(file, filename) {
-    if (/\.(png|jpe?g|gif|webp|svg)$/i.test(filename)) {
+    if (/\.(png|jpe?g|gif|webp|svg|ttf|otf|woff2?|eot)$/i.test(filename)) {
         uploadImage(file);
         return;
     }
