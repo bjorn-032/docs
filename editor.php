@@ -679,9 +679,81 @@ var TYPST_BUILTINS = [
 ];
 TYPST_BUILTINS.sort();
 
+// Snippets: {{placeholder}} marks the auto-selected region after insertion
+var SNIPPETS = {
+    'image':        'image("{{filename}}")',
+    'include':      'include("{{file.typ}}")',
+    'figure':       'figure(\n  image("{{filename}}"),\n  caption: [Caption]\n)',
+    'cite':         'cite(<{{key}}>)',
+    'link':         'link("{{url}}")[text]',
+    'text':         'text(size: {{11pt}})[content]',
+    'footnote':     'footnote[{{text}}]',
+    'strong':       'strong[{{text}}]',
+    'emph':         'emph[{{text}}]',
+    'highlight':    'highlight[{{text}}]',
+    'underline':    'underline[{{text}}]',
+    'strike':       'strike[{{text}}]',
+    'super':        'super[{{text}}]',
+    'sub':          'sub[{{text}}]',
+    'overline':     'overline[{{text}}]',
+    'heading':      'heading[{{Title}}]',
+    'box':          'box[{{content}}]',
+    'block':        'block[\n  {{content}}\n]',
+    'align':        'align({{center}})[\n  content\n]',
+    'columns':      'columns({{2}})[\n  content\n]',
+    'grid':         'grid(\n  columns: ({{auto}}, auto),\n  [], []\n)',
+    'table':        'table(\n  columns: ({{auto}}, auto),\n  [Header], [Header],\n  [Cell], [Cell]\n)',
+    'raw':          'raw("{{code}}", lang: "python")',
+    'rect':         'rect(width: {{100%}})',
+    'lorem':        'lorem({{50}})',
+    'h':            'h({{1em}})',
+    'v':            'v({{1em}})',
+    'pagebreak':    'pagebreak()',
+    'linebreak':    'linebreak()',
+    'bibliography': 'bibliography("{{refs.bib}}")',
+    'outline':      'outline()',
+};
+
+function insertSnippet(cm, from, to, snippet) {
+    var markerRe = /\{\{(.*?)\}\}/;
+    var m = markerRe.exec(snippet);
+    var clean = snippet.replace(/\{\{(.*?)\}\}/g, '$1');
+    cm.replaceRange(clean, from, to);
+    if (m) {
+        var before = snippet.slice(0, m.index).replace(/\{\{(.*?)\}\}/g, '$1');
+        var lines = before.split('\n');
+        var selLine = from.line + lines.length - 1;
+        var selCh = lines.length === 1 ? from.ch + lines[0].length : lines[lines.length - 1].length;
+        cm.setSelection({ line: selLine, ch: selCh }, { line: selLine, ch: selCh + m[1].length });
+    }
+}
+
 function typstHint(cm) {
     var cur = cm.getCursor();
     var before = cm.getLine(cur.line).slice(0, cur.ch);
+
+    // Filename completion inside #image("... and #include("...
+    var imgM = before.match(/#image\s*\(\s*"([^"]*)$/);
+    var incM = before.match(/#include\s*\(\s*"([^"]*)$/);
+    if (imgM || incM) {
+        var typed = (imgM || incM)[1];
+        var from = CodeMirror.Pos(cur.line, cur.ch - typed.length);
+        var candidates;
+        if (imgM) {
+            candidates = projectImages;
+        } else {
+            candidates = ['main.typ'].concat(
+                extraFiles.filter(function(f) { return /\.typ$/i.test(f.filename); })
+                          .map(function(f) { return f.filename; })
+            );
+        }
+        var list = candidates
+            .filter(function(f) { return f.toLowerCase().startsWith(typed.toLowerCase()); })
+            .map(function(f) { return { text: f, displayText: f, className: 'hint-typst' }; });
+        if (list.length) return { list: list, from: from, to: cur };
+    }
+
+    // Regular #function completion
     var m = before.match(/#([a-zA-Z]*)$/);
     if (!m) return;
     var prefix = m[1].toLowerCase();
@@ -689,10 +761,17 @@ function typstHint(cm) {
     var list = TYPST_BUILTINS
         .filter(function(b) { return b.startsWith(prefix); })
         .map(function(b) {
+            var snip = SNIPPETS[b];
+            var display = snip
+                ? '#' + snip.replace(/\{\{(.*?)\}\}/g, '$1').split('\n')[0]
+                : '#' + b;
             return {
                 text: b,
-                displayText: '#' + b,
-                className: 'hint-typst'
+                displayText: display,
+                className: 'hint-typst',
+                hint: snip ? (function(s) {
+                    return function(cm, data, completion) { insertSnippet(cm, data.from, data.to, s); };
+                })(snip) : undefined
             };
         });
     return { list: list, from: from, to: cur };
@@ -1317,8 +1396,8 @@ function makeImageItem(filename, depth) {
     div.draggable = true;
     div.addEventListener('dragstart', function(e) {
         draggedImage = { filename: filename };
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', filename);
+        e.dataTransfer.effectAllowed = 'copyMove';
+        e.dataTransfer.setData('text/plain', '');
         setTimeout(function() { div.classList.add('dragging'); }, 0);
     });
     div.addEventListener('dragend', function() {
@@ -1678,6 +1757,29 @@ loadFileList();
 loadImageList();
 setTimeout(compileDoc, 300);
 
+// Drop image from sidebar → insert #image("filename") with filename selected
+(function() {
+    var cmEl = editor.getWrapperElement();
+    cmEl.addEventListener('dragover', function(e) {
+        if (!draggedImage) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+    });
+    cmEl.addEventListener('drop', function(e) {
+        if (!draggedImage) return;
+        var filename = draggedImage.filename;
+        var pos = editor.coordsChar({ left: e.clientX, top: e.clientY });
+        draggedImage = null;
+        // setTimeout lets CodeMirror's own drop handler (on the child scroller) finish
+        // first — it inserts nothing because we set text/plain to '' in dragstart.
+        setTimeout(function() {
+            editor.focus();
+            editor.setCursor(pos);
+            insertSnippet(editor, pos, pos, '#image("{{' + filename + '}}")');
+        }, 0);
+    });
+})();
+
 // ── Autocomplete trigger ──────────────────────────────────────────────────────
 editor.on('inputRead', function(cm, change) {
     if (change.origin !== '+input') return;
@@ -1689,6 +1791,8 @@ editor.on('inputRead', function(cm, change) {
     } else if (/@[a-zA-Z0-9._:-]*$/.test(before) || /#cite\s*\(\s*<[a-zA-Z0-9._:-]*$/.test(before)) {
         var keys = getCitationKeys();
         if (keys.length) CodeMirror.showHint(cm, citationHint, { completeSingle: false });
+    } else if (/#image\s*\(\s*"[^"]*$/.test(before) || /#include\s*\(\s*"[^"]*$/.test(before)) {
+        CodeMirror.showHint(cm, typstHint, { completeSingle: false });
     }
 });
 
