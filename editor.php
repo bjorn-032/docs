@@ -334,6 +334,21 @@ html, body { height: 100%; overflow: hidden; }
 
     <!-- Code editor -->
     <div class="editor-pane" id="editorPane">
+        <div class="find-bar" id="findBar" style="display:none">
+            <div class="find-row">
+                <input class="find-input" id="findInput" type="text" placeholder="Find…" autocomplete="off" spellcheck="false">
+                <span class="find-count" id="findCount"></span>
+                <button class="find-btn" id="findPrevBtn" title="Previous (Shift+Enter)"><i class="ri-arrow-up-s-line"></i></button>
+                <button class="find-btn" id="findNextBtn" title="Next (Enter)"><i class="ri-arrow-down-s-line"></i></button>
+                <button class="find-btn" id="findToggleBtn" title="Show replace" style="font-size:11px;padding:3px 7px">Replace</button>
+                <button class="find-btn" id="findCloseBtn" title="Close (Esc)"><i class="ri-close-line"></i></button>
+            </div>
+            <div class="find-row" id="findReplaceRow" style="display:none">
+                <input class="find-input" id="replaceInput" type="text" placeholder="Replace…" autocomplete="off" spellcheck="false">
+                <button class="find-btn" id="replaceOneBtn" style="font-size:11px;padding:3px 7px">Replace</button>
+                <button class="find-btn" id="replaceAllBtn" style="font-size:11px;padding:3px 7px">All</button>
+            </div>
+        </div>
         <textarea id="codeEditor"><?= htmlspecialchars($doc['content'] ?? '') ?></textarea>
     </div>
 
@@ -753,6 +768,8 @@ var editor = CodeMirror.fromTextArea(document.getElementById('codeEditor'), {
         "Ctrl-S": function() { saveCurrentFile(); compileDoc(); },
         "Ctrl-Enter": function() { compileDoc(); },
         "Ctrl-/": "toggleComment",
+        "Ctrl-F": function() { openFindBar(false); },
+        "Ctrl-H": function() { openFindBar(true); },
         "Tab": function(cm) {
             if (cm.state.completionActive) {
                 cm.state.completionActive.pick();
@@ -2186,6 +2203,132 @@ function escHtml(s) {
             localStorage.setItem('typst_preview_w', preview.offsetWidth);
             editor.refresh();
         }
+    });
+})();
+
+// ── Find & Replace ────────────────────────────────────────────────────────────
+var findMatches = [];
+var findActiveIdx = -1;
+var findMarks = [];
+var replaceVisible = false;
+
+function openFindBar(withReplace) {
+    var bar = document.getElementById('findBar');
+    bar.style.display = 'flex';
+    replaceVisible = withReplace;
+    document.getElementById('findReplaceRow').style.display = withReplace ? 'flex' : 'none';
+    document.getElementById('findToggleBtn').title = withReplace ? 'Hide replace' : 'Show replace';
+    var sel = editor.getSelection();
+    if (sel && sel.indexOf('\n') === -1) document.getElementById('findInput').value = sel;
+    document.getElementById('findInput').focus();
+    document.getElementById('findInput').select();
+    updateFindMatches();
+}
+
+function closeFindBar() {
+    document.getElementById('findBar').style.display = 'none';
+    clearFindMarks();
+    editor.focus();
+}
+
+function clearFindMarks() {
+    findMarks.forEach(function(m) { m.clear(); });
+    findMarks = [];
+    findMatches = [];
+    findActiveIdx = -1;
+}
+
+function updateFindMatches() {
+    clearFindMarks();
+    var query = document.getElementById('findInput').value;
+    var input = document.getElementById('findInput');
+    if (!query) {
+        input.classList.remove('find-no-match');
+        document.getElementById('findCount').textContent = '';
+        return;
+    }
+    var cur = editor.getSearchCursor(query, CodeMirror.Pos(0, 0), { caseFold: true });
+    while (cur.findNext()) {
+        findMatches.push({ from: cur.from(), to: cur.to() });
+        findMarks.push(editor.markText(cur.from(), cur.to(), { className: 'find-highlight' }));
+    }
+    input.classList.toggle('find-no-match', findMatches.length === 0);
+    if (findMatches.length) {
+        var editorCursor = editor.getCursor();
+        var startIdx = 0;
+        for (var i = 0; i < findMatches.length; i++) {
+            if (CodeMirror.cmpPos(findMatches[i].from, editorCursor) >= 0) { startIdx = i; break; }
+        }
+        activateMatch(startIdx);
+    } else {
+        document.getElementById('findCount').textContent = 'No results';
+    }
+}
+
+function activateMatch(idx) {
+    if (!findMatches.length) return;
+    findMarks.forEach(function(m) { m.clear(); });
+    findMarks = [];
+    findMatches.forEach(function(m, i) {
+        findMarks.push(editor.markText(m.from, m.to, {
+            className: i === idx ? 'find-highlight-active' : 'find-highlight'
+        }));
+    });
+    findActiveIdx = idx;
+    editor.scrollIntoView({ from: findMatches[idx].from, to: findMatches[idx].to }, 80);
+    document.getElementById('findCount').textContent = (idx + 1) + ' / ' + findMatches.length;
+}
+
+function findNext() {
+    if (!findMatches.length) { updateFindMatches(); return; }
+    activateMatch((findActiveIdx + 1) % findMatches.length);
+}
+
+function findPrev() {
+    if (!findMatches.length) { updateFindMatches(); return; }
+    activateMatch((findActiveIdx - 1 + findMatches.length) % findMatches.length);
+}
+
+function replaceOne() {
+    if (!findMatches.length || findActiveIdx < 0) return;
+    var m = findMatches[findActiveIdx];
+    editor.replaceRange(document.getElementById('replaceInput').value, m.from, m.to);
+    updateFindMatches();
+}
+
+function replaceAll() {
+    var query = document.getElementById('findInput').value;
+    if (!query) return;
+    var replacement = document.getElementById('replaceInput').value;
+    var count = 0;
+    editor.operation(function() {
+        var cur = editor.getSearchCursor(query, CodeMirror.Pos(0, 0), { caseFold: true });
+        while (cur.findNext()) { cur.replace(replacement); count++; }
+    });
+    updateFindMatches();
+    if (count) setIndicator('Replaced ' + count);
+}
+
+(function() {
+    document.getElementById('findInput').addEventListener('input', updateFindMatches);
+    document.getElementById('findInput').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter')  { e.shiftKey ? findPrev() : findNext(); e.preventDefault(); }
+        if (e.key === 'Escape') { closeFindBar(); e.preventDefault(); }
+    });
+    document.getElementById('replaceInput').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter')  { replaceOne(); e.preventDefault(); }
+        if (e.key === 'Escape') { closeFindBar(); e.preventDefault(); }
+    });
+    document.getElementById('findNextBtn').addEventListener('click', findNext);
+    document.getElementById('findPrevBtn').addEventListener('click', findPrev);
+    document.getElementById('findCloseBtn').addEventListener('click', closeFindBar);
+    document.getElementById('replaceOneBtn').addEventListener('click', replaceOne);
+    document.getElementById('replaceAllBtn').addEventListener('click', replaceAll);
+    document.getElementById('findToggleBtn').addEventListener('click', function() {
+        replaceVisible = !replaceVisible;
+        document.getElementById('findReplaceRow').style.display = replaceVisible ? 'flex' : 'none';
+        this.title = replaceVisible ? 'Hide replace' : 'Show replace';
+        if (replaceVisible) document.getElementById('replaceInput').focus();
     });
 })();
 

@@ -671,6 +671,67 @@ button:focus { outline: 0; }
 }
 .sidebar-info-row span:last-child { color: var(--grayText); }
 
+/* ── Find & replace bar ── */
+.find-bar {
+    position: absolute;
+    top: 0;
+    right: 16px;
+    z-index: 20;
+    background: var(--navigation);
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    padding: 6px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.3);
+    min-width: 300px;
+}
+.find-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.find-input {
+    flex: 1;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+    padding: 4px 8px;
+    min-width: 0;
+}
+.find-input:focus { outline: none; border-color: var(--colorTheme); }
+.find-input.find-no-match { border-color: #e53935; background: rgba(229,57,53,.08); }
+.find-count {
+    font-size: 11px;
+    color: var(--grayText);
+    min-width: 48px;
+    text-align: center;
+    flex-shrink: 0;
+}
+.find-btn {
+    background: none;
+    border: none;
+    color: var(--grayText);
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 3px 6px;
+    font-size: 12px;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    transition: background .12s, color .12s;
+}
+.find-btn:hover { background: var(--hover); color: var(--text); }
+.find-btn i { font-size: 15px; }
+.find-highlight { background: rgba(255,200,0,.25); border-radius: 2px; }
+.find-highlight-active { background: rgba(255,160,0,.55); border-radius: 2px; }
+
 /* ── Editor pane ── */
 .editor-pane {
     flex: 1;
