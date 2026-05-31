@@ -275,8 +275,26 @@ button:focus { outline: 0; }
     font-weight: 600;
     flex-shrink: 0;
 }
-.search-wrap {
+.sort-select {
+    background: var(--coninfo);
+    border: none;
+    border-radius: 9px;
+    padding: 9px 12px;
+    font-family: inherit;
+    font-size: 14px;
+    color: var(--text);
+    cursor: pointer;
+    outline: none;
+    flex-shrink: 0;
+}
+.light .sort-select { background: #e2e2e2; }
+.search-sort-group {
     margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.search-wrap {
     max-width: 360px;
     width: 280px;
     position: relative;
@@ -350,14 +368,14 @@ button:focus { outline: 0; }
     font-size: 12px;
     color: var(--grayText);
 }
-.doc-card-delete {
+.doc-card-more {
     position: absolute;
     top: 8px;
     right: 8px;
-    background: rgba(220,53,69,.85);
+    background: rgba(255,255,255,0.9);
     border: none;
     border-radius: 6px;
-    color: white;
+    color: #333;
     width: 28px;
     height: 28px;
     font-size: 14px;
@@ -365,7 +383,39 @@ button:focus { outline: 0; }
     align-items: center;
     justify-content: center;
 }
-.doc-card:hover .doc-card-delete { display: flex; }
+.doc-card-more:hover { background: #fff; }
+.doc-card:hover .doc-card-more { display: flex; }
+.card-menu {
+    display: none;
+    position: absolute;
+    z-index: 300;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 4px;
+    min-width: 150px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.25);
+}
+.card-menu.open { display: block; }
+.card-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    background: none;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+}
+.card-menu-item:hover { background: var(--hover); }
+.card-menu-item i { font-size: 15px; color: var(--grayText); }
+.card-menu-danger { color: #ef5350; }
+.card-menu-danger i { color: #ef5350; }
+.card-menu-danger:hover { background: rgba(239,83,80,.1); }
 
 .empty-state {
     text-align: center;

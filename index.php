@@ -55,9 +55,17 @@ $themeClass = $isDark ? "dark" : "light";
     <div class="library-header">
         <h1>Your Documents</h1>
         <span id="docCount" style="font-size:13px;color:var(--grayText)"><?= count($docs) ?> document<?= count($docs) !== 1 ? 's' : '' ?></span>
-        <div class="search-wrap">
-            <i class="ri-search-line"></i>
-            <input type="text" id="searchInput" placeholder="Search…" oninput="filterDocs(this.value)" autocomplete="off">
+        <div class="search-sort-group">
+            <div class="search-wrap">
+                <i class="ri-search-line"></i>
+                <input type="text" id="searchInput" placeholder="Search…" oninput="filterDocs(this.value)" autocomplete="off">
+            </div>
+            <select class="sort-select" id="sortSelect" onchange="sortDocs()">
+                <option value="updated">Last edited</option>
+                <option value="created">Date created</option>
+                <option value="name_asc">Name A–Z</option>
+                <option value="name_desc">Name Z–A</option>
+            </select>
         </div>
     </div>
 
@@ -70,7 +78,7 @@ $themeClass = $isDark ? "dark" : "light";
     <?php else: ?>
     <div class="doc-grid">
         <?php foreach ($docs as $doc): ?>
-        <div class="doc-card" onclick="openDoc(<?= (int)$doc['id'] ?>)">
+        <div class="doc-card" onclick="openDoc(<?= (int)$doc['id'] ?>)" data-title="<?= htmlspecialchars(strtolower($doc['title'])) ?>" data-updated="<?= strtotime($doc['updated_at']) ?>" data-created="<?= strtotime($doc['created_at']) ?>">
             <div class="doc-card-preview">
                 <i class="ri-file-text-line" style="font-size:56px"></i>
             </div>
@@ -78,13 +86,21 @@ $themeClass = $isDark ? "dark" : "light";
                 <div class="doc-card-title"><?= htmlspecialchars($doc['title']) ?></div>
                 <div class="doc-card-date"><?= date('M j, Y', strtotime($doc['updated_at'])) ?></div>
             </div>
-            <button class="doc-card-delete" onclick="deleteDoc(event, <?= (int)$doc['id'] ?>)" title="Delete">
-                <i class="ri-delete-bin-line" style="font-size:16px"></i>
+            <button class="doc-card-more" data-id="<?= (int)$doc['id'] ?>" data-title="<?= htmlspecialchars($doc['title'], ENT_QUOTES) ?>" onclick="openCardMenu(event)" title="More">
+                <i class="ri-more-line" style="font-size:16px"></i>
             </button>
         </div>
         <?php endforeach; ?>
     </div>
     <?php endif; ?>
+</div>
+
+<!-- Card context menu -->
+<div class="card-menu" id="cardMenu">
+    <button class="card-menu-item" onclick="renameDoc()"><i class="ri-pencil-line"></i>Rename</button>
+    <button class="card-menu-item" onclick="duplicateDoc()"><i class="ri-file-copy-line"></i>Duplicate</button>
+    <div style="height:1px;background:var(--border);margin:4px 0"></div>
+    <button class="card-menu-item card-menu-danger" onclick="deleteDocFromMenu()"><i class="ri-delete-bin-line"></i>Delete</button>
 </div>
 
 <!-- Import modal -->
@@ -189,6 +205,71 @@ function uploadProject(formData) {
     xhr.send(formData);
 }
 
+var _menuDocId = null, _menuDocTitle = null;
+
+function openCardMenu(e) {
+    e.stopPropagation();
+    _menuDocId    = e.currentTarget.dataset.id;
+    _menuDocTitle = e.currentTarget.dataset.title;
+    var menu = document.getElementById('cardMenu');
+    var btn  = e.currentTarget;
+    menu.classList.add('open');
+    requestAnimationFrame(function() {
+        var r  = btn.getBoundingClientRect();
+        var left = r.right + window.scrollX - menu.offsetWidth;
+        if (r.right - menu.offsetWidth < 8) left = r.left + window.scrollX;
+        menu.style.top  = (r.bottom + window.scrollY + 4) + 'px';
+        menu.style.left = left + 'px';
+    });
+}
+function closeCardMenu() {
+    document.getElementById('cardMenu').classList.remove('open');
+}
+document.addEventListener('click', closeCardMenu);
+
+function renameDoc() {
+    closeCardMenu();
+    var newTitle = prompt('Rename document:', _menuDocTitle);
+    if (!newTitle || newTitle.trim() === _menuDocTitle) return;
+    newTitle = newTitle.trim();
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', 'api/rename.php', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onload = function() {
+        var res = JSON.parse(xhr.responseText);
+        if (res.ok) window.location.reload();
+        else alert('Error: ' + res.error);
+    };
+    xhr.send('id=' + _menuDocId + '&title=' + encodeURIComponent(newTitle));
+}
+
+function deleteDocFromMenu() {
+    closeCardMenu();
+    if (!confirm('Delete "' + _menuDocTitle + '"? This cannot be undone.')) return;
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', 'api/delete.php', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onload = function() {
+        var res = JSON.parse(xhr.responseText);
+        if (res.ok) window.location.reload();
+        else alert('Error: ' + res.error);
+    };
+    xhr.send('id=' + _menuDocId);
+}
+
+function duplicateDoc() {
+    closeCardMenu();
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', 'api/duplicate.php', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onload = function() {
+        var res = JSON.parse(xhr.responseText);
+        if (res.ok) window.location.reload();
+        else alert('Error: ' + res.error);
+    };
+    xhr.send('id=' + _menuDocId);
+}
+
 document.addEventListener('keydown', function(e) {
     var inp = document.getElementById('searchInput');
     if (!inp) return;
@@ -197,6 +278,20 @@ document.addEventListener('keydown', function(e) {
         e.preventDefault(); inp.focus(); inp.select();
     }
 });
+
+function sortDocs() {
+    var mode = document.getElementById('sortSelect').value;
+    var grid = document.querySelector('.doc-grid');
+    if (!grid) return;
+    var cards = Array.from(grid.querySelectorAll('.doc-card'));
+    cards.sort(function(a, b) {
+        if (mode === 'name_asc')  return a.dataset.title.localeCompare(b.dataset.title);
+        if (mode === 'name_desc') return b.dataset.title.localeCompare(a.dataset.title);
+        if (mode === 'created')   return b.dataset.created - a.dataset.created;
+        return b.dataset.updated - a.dataset.updated; // default: last edited
+    });
+    cards.forEach(function(c) { grid.appendChild(c); });
+}
 
 function filterDocs(q) {
     q = q.trim().toLowerCase();
@@ -243,19 +338,6 @@ document.addEventListener('click', function() {
     if (m) m.classList.remove('open');
 });
 
-function deleteDoc(e, id) {
-    e.stopPropagation();
-    if (!confirm('Delete this document? This cannot be undone.')) return;
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', 'api/delete.php', true);
-    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-    xhr.onload = function() {
-        var res = JSON.parse(xhr.responseText);
-        if (res.ok) window.location.reload();
-        else alert('Error: ' + res.error);
-    };
-    xhr.send('id=' + id);
-}
 </script>
 </body>
 </html>
