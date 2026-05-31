@@ -6,17 +6,24 @@ $user = requireAuthApi();
 $db = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 if ($db->connect_error) { echo json_encode(['ok'=>false,'error'=>'DB error']); exit; }
 
-$id     = (int)($_POST['id'] ?? 0);
-$doc_id = (int)($_POST['document_id'] ?? 0);
+$doc_id   = (int)($_POST['document_id'] ?? 0);
+$filename = trim($_POST['filename'] ?? '', '/');
 
-$stmt = $db->prepare(
-    "DELETE pf FROM typst_project_files pf
-     JOIN typst_documents d ON d.id = pf.document_id
-     WHERE pf.id=? AND pf.document_id=? AND d.owner=?"
-);
-$stmt->bind_param("iis", $id, $doc_id, $user['sub']);
+if ($filename === '' || strpos($filename, '..') !== false) {
+    echo json_encode(['ok'=>false,'error'=>'Invalid filename']); exit;
+}
+
+$stmt = $db->prepare("SELECT id FROM typst_documents WHERE id=? AND owner=?");
+$stmt->bind_param("is", $doc_id, $user['sub']);
 $stmt->execute();
+$stmt->store_result();
+$found = $stmt->num_rows > 0;
 $stmt->close();
 $db->close();
 
-echo json_encode(['ok'=>true]);
+if (!$found) { echo json_encode(['ok'=>false,'error'=>'Not found']); exit; }
+
+$path = __DIR__ . "/../data/{$doc_id}/{$filename}";
+if (is_file($path)) unlink($path);
+
+echo json_encode(['ok' => true]);

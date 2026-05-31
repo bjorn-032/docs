@@ -832,3 +832,88 @@ button:focus { outline: 0; }
     line-height: 1.6;
     border: 1px solid #3d0000;
 }
+
+/* ── Import project modal ── */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.6);
+    z-index: 500;
+    align-items: center;
+    justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px;
+    width: 380px;
+    max-width: calc(100vw - 32px);
+    box-shadow: 0 16px 48px rgba(0,0,0,.4);
+}
+.modal-title {
+    font-size: 17px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--text);
+    font-family: 'BricolageGrotesque', 'Poppins', sans-serif;
+}
+.modal-desc {
+    font-size: 13px;
+    color: var(--grayText);
+    margin-bottom: 20px;
+    line-height: 1.5;
+}
+.import-options {
+    display: flex;
+    gap: 12px;
+}
+.import-option-btn {
+    flex: 1;
+    background: var(--coninfo);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    transition: border-color .15s, background .15s;
+    cursor: pointer;
+}
+.import-option-btn:hover {
+    border-color: var(--colorTheme);
+    background: var(--hover);
+}
+.import-option-btn i {
+    font-size: 30px;
+    color: var(--colorTheme);
+}
+.import-progress-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.7);
+    z-index: 600;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 14px;
+    font-size: 14px;
+    color: #fff;
+}
+.import-progress-overlay.open { display: flex; }
+.import-spinner {
+    width: 38px;
+    height: 38px;
+    border: 3px solid rgba(255,255,255,.2);
+    border-top-color: var(--colorTheme);
+    border-radius: 50%;
+    animation: importSpin .7s linear infinite;
+}
+@keyframes importSpin { to { transform: rotate(360deg); } }

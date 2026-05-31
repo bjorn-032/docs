@@ -7,7 +7,7 @@ $db = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 if ($db->connect_error) { echo json_encode(['ok'=>false,'error'=>'DB error']); exit; }
 
 $doc_id   = (int)($_POST['document_id'] ?? 0);
-$filename = trim($_POST['filename'] ?? '', '/');
+$filename = trim($_POST['filename'] ?? '');
 $content  = $_POST['content'] ?? '';
 
 if ($filename === '' || strpos($filename, '..') !== false) {
@@ -24,7 +24,7 @@ $db->close();
 
 if (!$found) { echo json_encode(['ok'=>false,'error'=>'Not found']); exit; }
 
-$target = __DIR__ . "/../data/{$doc_id}/{$filename}";
+$target = __DIR__ . "/../data/{$doc_id}/" . $filename;
 $dir    = dirname($target);
 if (!is_dir($dir)) mkdir($dir, 0777, true);
 file_put_contents($target, $content);

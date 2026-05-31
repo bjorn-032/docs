@@ -22,7 +22,7 @@ $db->close();
 
 if (!$found) { echo json_encode(['ok'=>false,'error'=>'Not found']); exit; }
 
-$path = __DIR__ . "/../uploads/{$doc_id}/" . $filename;
+$path = __DIR__ . "/../data/{$doc_id}/" . $filename;
 if (file_exists($path) && is_file($path)) @unlink($path);
 
 echo json_encode(['ok'=>true]);

@@ -11,11 +11,14 @@ $content = $_POST['content'] ?? '';
 $title   = trim($_POST['title'] ?? '');
 if (!$title) $title = 'Untitled Document';
 
-// owner check is part of the WHERE so a wrong user silently saves nothing
-$stmt = $db->prepare("UPDATE typst_documents SET content=?, title=?, updated_at=NOW() WHERE id=? AND owner=?");
-$stmt->bind_param("ssis", $content, $title, $id, $user['sub']);
+$stmt = $db->prepare("UPDATE typst_documents SET title=?, updated_at=NOW() WHERE id=? AND owner=?");
+$stmt->bind_param("sis", $title, $id, $user['sub']);
 $stmt->execute();
 $stmt->close();
 $db->close();
+
+$upload_dir = __DIR__ . "/../data/{$id}";
+if (!is_dir($upload_dir)) mkdir($upload_dir, 0777, true);
+file_put_contents($upload_dir . '/main.typ', $content);
 
 echo json_encode(['ok'=>true]);

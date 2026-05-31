@@ -8,34 +8,21 @@ if (!$doc_id) { http_response_code(400); exit; }
 $db = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 if ($db->connect_error) { http_response_code(500); exit; }
 
-$stmt = $db->prepare("SELECT title, content FROM typst_documents WHERE id=? AND owner=?");
+$stmt = $db->prepare("SELECT title FROM typst_documents WHERE id=? AND owner=?");
 $stmt->bind_param("is", $doc_id, $user['sub']);
 $stmt->execute();
 $doc = $stmt->get_result()->fetch_assoc();
 $stmt->close();
+$db->close();
 
 if (!$doc) { http_response_code(403); exit; }
 
-$stmt = $db->prepare("SELECT filename, content FROM typst_project_files WHERE document_id=?");
-$stmt->bind_param("i", $doc_id);
-$stmt->execute();
-$res = $stmt->get_result();
-$extraFiles = [];
-while ($row = $res->fetch_assoc()) $extraFiles[] = $row;
-$stmt->close();
-$db->close();
+$uploadsDir = __DIR__ . "/../data/{$doc_id}";
 
 $tmpZip = tempnam(sys_get_temp_dir(), 'typst_zip_');
 $zip = new ZipArchive();
 if ($zip->open($tmpZip, ZipArchive::OVERWRITE) !== true) { http_response_code(500); exit; }
 
-$zip->addFromString('main.typ', $doc['content'] ?? '');
-
-foreach ($extraFiles as $f) {
-    $zip->addFromString($f['filename'], $f['content'] ?? '');
-}
-
-$uploadsDir = __DIR__ . "/../uploads/{$doc_id}";
 if (is_dir($uploadsDir)) {
     $iter = new RecursiveIteratorIterator(
         new RecursiveDirectoryIterator($uploadsDir, RecursiveDirectoryIterator::SKIP_DOTS)

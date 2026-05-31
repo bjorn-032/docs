@@ -18,17 +18,17 @@ $db->close();
 
 if (!$found) { echo json_encode(['ok'=>false,'error'=>'Not found']); exit; }
 
-$dir = __DIR__ . "/../uploads/{$doc_id}";
+$dir = __DIR__ . "/../data/{$doc_id}";
 $images = [];
 if (is_dir($dir)) {
     $iter = new RecursiveIteratorIterator(
         new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS)
     );
     foreach ($iter as $file) {
-        if ($file->isFile()) {
-            $rel = str_replace('\\', '/', substr($file->getPathname(), strlen($dir) + 1));
-            $images[] = $rel;
-        }
+        if (!$file->isFile()) continue;
+        $rel = str_replace('\\', '/', substr($file->getPathname(), strlen($dir) + 1));
+        if (strtolower(pathinfo($rel, PATHINFO_EXTENSION)) === 'typ') continue;
+        $images[] = $rel;
     }
     sort($images);
 }

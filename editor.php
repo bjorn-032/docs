@@ -6,7 +6,7 @@ $db = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 if ($db->connect_error) die("DB error");
 
 $id = (int)($_GET['id'] ?? 0);
-$stmt = $db->prepare("SELECT id, title, content FROM typst_documents WHERE id=? AND owner=?");
+$stmt = $db->prepare("SELECT id, title FROM typst_documents WHERE id=? AND owner=?");
 $stmt->bind_param("is", $id, $user['sub']);
 $stmt->execute();
 $res = $stmt->get_result();
@@ -15,6 +15,9 @@ $stmt->close();
 $db->close();
 
 if (!$doc) { header("Location: index.php"); exit; }
+
+$mainTypPath    = __DIR__ . "/data/{$id}/main.typ";
+$doc['content'] = is_file($mainTypPath) ? file_get_contents($mainTypPath) : '';
 
 $isDark = ($_COOKIE["darkmode"] ?? "1") !== "1";
 $themeClass = $isDark ? "dark" : "light";
@@ -258,7 +261,7 @@ html, body { height: 100%; overflow: hidden; }
                     <button class="panel-icon-btn" onclick="document.getElementById('folderUploadInput').click()" title="Upload folder">
                         <i class="ri-folder-upload-line"></i>
                     </button>
-                    <input type="file" id="fileUploadInput" accept=".typ,.bib,.md,.png,.jpg,.jpeg,.gif,.webp,.svg" style="display:none" multiple onchange="handleFileUpload(this)">
+                    <input type="file" id="fileUploadInput" style="display:none" multiple onchange="handleFileUpload(this)">
                     <input type="file" id="folderUploadInput" style="display:none" webkitdirectory multiple onchange="handleFileUpload(this)">
                 </div>
             </div>
@@ -788,7 +791,7 @@ function prefetchBibFiles() {
             try { res = JSON.parse(xhr.responseText); } catch(e) { return; }
             if (res.ok) fileCache[f.id] = res.content;
         };
-        xhr.send('id=' + f.id + '&document_id=' + DOC_ID);
+        xhr.send('filename=' + encodeURIComponent(f.id) + '&document_id=' + DOC_ID);
     });
 }
 
@@ -881,9 +884,11 @@ var programmaticScroll  = false;
 // Multi-file state
 var activeFile       = { id: null, filename: 'main.typ' }; // null = main doc
 var fileCache        = {};        // fileId → content string
+var assetCache       = {};        // filename → content string (for uploads-based files)
 var extraFiles       = [];        // [{id, filename}] from API
 var projectImages    = [];        // [filename] from uploads dir
-var collapsedFolders = new Set(); // folder paths that are collapsed
+var collapsedFolders    = new Set(); // folder paths that are collapsed
+var initialImgLoadDone  = false;
 var localFolders     = new Set(); // empty folders created this session
 var initialLoadDone  = false;
 var draggedFile      = null;      // {id, filename} being dragged
@@ -1012,7 +1017,7 @@ function renderFileTree(node, pathPrefix, depth, list) {
         return a.filename.localeCompare(b.filename);
     }).forEach(function(f) {
         if (f.isImage) {
-            list.appendChild(makeImageItem(f.filename, depth));
+            list.appendChild(makeImageItem(f.filename, f.isActive || false, depth));
         } else {
             list.appendChild(makeFileItem(f.id, f.filename, activeFile.id === f.id, depth));
         }
@@ -1022,9 +1027,9 @@ function renderFileTree(node, pathPrefix, depth, list) {
 function renderFileList() {
     var list = document.getElementById('fileList');
     list.innerHTML = '';
-    list.appendChild(makeFileItem(null, 'main.typ', activeFile.id === null, 0));
+    list.appendChild(makeFileItem(null, 'main.typ', activeFile.id === null && !activeFile.isAsset, 0));
     var allItems = extraFiles.concat(
-        projectImages.map(function(name) { return { id: null, filename: name, isImage: true }; })
+        projectImages.map(function(name) { return { id: null, filename: name, isImage: true, isActive: !!activeFile.isAsset && activeFile.filename === name }; })
     );
     renderFileTree(buildFileTree(allItems), '', 0, list);
     // Root drop zone — drop here to move file/folder out of any folder
@@ -1193,7 +1198,7 @@ function moveFile(file, newFilename) {
         if (activeFile.id === file.id) activeFile.filename = res.filename;
         renderFileList();
     };
-    xhr.send('id=' + file.id + '&document_id=' + DOC_ID + '&filename=' + encodeURIComponent(newFilename));
+    xhr.send('filename=' + encodeURIComponent(file.filename) + '&document_id=' + DOC_ID + '&new_filename=' + encodeURIComponent(newFilename));
 }
 
 function moveFolder(oldPath, newPath) {
@@ -1226,7 +1231,7 @@ function moveFolder(oldPath, newPath) {
             if (--pending === 0) renderFileList();
         };
         xhr.onerror = function() { if (--pending === 0) renderFileList(); };
-        xhr.send('id=' + file.id + '&document_id=' + DOC_ID + '&filename=' + encodeURIComponent(newFilename));
+        xhr.send('filename=' + encodeURIComponent(file.filename) + '&document_id=' + DOC_ID + '&new_filename=' + encodeURIComponent(newFilename));
     });
 }
 
@@ -1241,7 +1246,7 @@ function deleteFolder(path) {
     var label = path + (total ? ' (' + total + ' item' + (total !== 1 ? 's' : '') + ')' : '');
     if (!confirm('Delete folder "' + label + '"? This cannot be undone.')) return;
 
-    if (activeFile.id !== null && (activeFile.filename === path || activeFile.filename.startsWith(path + '/'))) {
+    if ((activeFile.id !== null || activeFile.isAsset) && (activeFile.filename === path || activeFile.filename.startsWith(path + '/'))) {
         switchFile({ id: null, filename: 'main.typ' });
     }
     localFolders.delete(path);
@@ -1261,7 +1266,7 @@ function deleteFolder(path) {
             onDone();
         };
         xhr.onerror = onDone;
-        xhr.send('id=' + file.id + '&document_id=' + DOC_ID);
+        xhr.send('filename=' + encodeURIComponent(file.id) + '&document_id=' + DOC_ID);
     });
 
     imagesToDelete.forEach(function(name) {
@@ -1286,8 +1291,10 @@ function addFolder() {
 
 function switchFile(file) {
     // Flush current editor content to cache
-    if (activeFile.id === null) {
-        // main file: nothing to cache (main content is always in editor when active)
+    if (activeFile.isAsset) {
+        assetCache[activeFile.filename] = editor.getValue();
+    } else if (activeFile.id === null) {
+        // main file: nothing to cache (tracked in mainContent elsewhere)
     } else {
         fileCache[activeFile.id] = editor.getValue();
     }
@@ -1297,9 +1304,22 @@ function switchFile(file) {
     activeFile = file;
 
     switchingFile = true;
-    if (file.id === null) {
-        // Switching to main file — content is already in fileCache or we just read it
-        // The main file content is tracked separately: restore from mainContent
+    if (file.isAsset) {
+        if (assetCache[file.filename] !== undefined) {
+            editor.setValue(assetCache[file.filename]);
+            switchingFile = false;
+        } else {
+            editor.setValue('');
+            fetch('api/image_serve.php?document_id=' + DOC_ID + '&filename=' + encodeURIComponent(file.filename))
+                .then(function(r) { return r.text(); })
+                .then(function(text) {
+                    assetCache[file.filename] = text;
+                    if (activeFile.isAsset && activeFile.filename === file.filename) editor.setValue(text);
+                    switchingFile = false;
+                })
+                .catch(function() { switchingFile = false; });
+        }
+    } else if (file.id === null) {
         editor.setValue(mainContent);
         switchingFile = false;
     } else {
@@ -1307,7 +1327,6 @@ function switchFile(file) {
             editor.setValue(fileCache[file.id]);
             switchingFile = false;
         } else {
-            // Fetch from server
             editor.setValue('');
             var xhr = new XMLHttpRequest();
             xhr.open('POST', 'api/file_get.php', true);
@@ -1321,7 +1340,7 @@ function switchFile(file) {
                 }
                 switchingFile = false;
             };
-            xhr.send('id=' + file.id + '&document_id=' + DOC_ID);
+            xhr.send('filename=' + encodeURIComponent(file.id) + '&document_id=' + DOC_ID);
         }
     }
     renderFileList();
@@ -1363,27 +1382,30 @@ function deleteFile(id) {
         if (activeFile.id === id) switchFile({ id: null, filename: 'main.typ' });
         loadFileList();
     };
-    xhr.send('id=' + id + '&document_id=' + DOC_ID);
+    xhr.send('filename=' + encodeURIComponent(id) + '&document_id=' + DOC_ID);
 }
 
 // ── Image management ──────────────────────────────────────────────────────────
-function makeImageItem(filename, depth) {
+function makeImageItem(filename, isActive, depth) {
     depth = depth || 0;
     var displayName = filename.split('/').pop();
     var div = document.createElement('div');
-    div.className = 'file-item';
+    div.className = 'file-item' + (isActive ? ' active' : '');
     div.style.paddingLeft = (12 + depth * 16) + 'px';
-    var isFont = /\.(ttf|otf|woff2?|eot)$/i.test(filename);
-    var isPdf  = /\.pdf$/i.test(filename);
-    var fileIcon  = isPdf ? 'ri-file-pdf-line' : (isFont ? 'ri-font-size' : 'ri-image-fill');
-    var fileColor = isPdf ? '#ef5350'          : (isFont ? '#ce93d8'      : '#f48fb1');
+    var isImage = /\.(png|jpe?g|gif|webp|svg)$/i.test(filename);
+    var isFont  = /\.(ttf|otf|woff2?|eot)$/i.test(filename);
+    var isPdf   = /\.pdf$/i.test(filename);
+    var isEditable = !isImage && !isPdf && !isFont;
+    var fileIcon  = isPdf ? 'ri-file-pdf-line' : (isFont ? 'ri-font-size' : (isImage ? 'ri-image-fill' : 'ri-file-line'));
+    var fileColor = isPdf ? '#ef5350'          : (isFont ? '#ce93d8'      : (isImage ? '#f48fb1'       : '#9e9e9e'));
     div.innerHTML =
         '<i class="' + fileIcon + '" style="color:' + fileColor + '"></i>' +
         '<span class="file-name">' + escHtml(displayName) + '</span>';
     div.onclick = function(e) {
         if (e.target.closest('.file-del')) return;
         if (e.detail >= 2) return;
-        if (!isFont) openLightbox(filename);
+        if (isEditable) switchFile({ id: null, filename: filename, isAsset: true });
+        else if (isImage || isPdf) openLightbox(filename);
     };
     div.addEventListener('dblclick', function(e) {
         e.stopPropagation();
@@ -1406,7 +1428,7 @@ function makeImageItem(filename, depth) {
     });
     var del = document.createElement('button');
     del.className = 'file-del';
-    del.title = 'Delete image';
+    del.title = 'Delete file';
     del.innerHTML = '<i class="ri-close-line"></i>';
     del.onclick = function(e) { e.stopPropagation(); deleteImage(filename); };
     div.appendChild(del);
@@ -1484,6 +1506,15 @@ function loadImageList() {
         var res;
         try { res = JSON.parse(xhr.responseText); } catch(e) { return; }
         projectImages = res.ok ? res.images : [];
+        if (!initialImgLoadDone) {
+            initialImgLoadDone = true;
+            projectImages.forEach(function(name) {
+                var parts = name.split('/');
+                for (var i = 1; i < parts.length; i++) {
+                    collapsedFolders.add(parts.slice(0, i).join('/'));
+                }
+            });
+        }
         renderFileList();
     };
     xhr.send('document_id=' + DOC_ID);
@@ -1570,7 +1601,13 @@ function handleFileUpload(input) {
     }
 
     items.forEach(function(item) {
-        if (/\.(png|jpe?g|gif|webp|svg|pdf|ttf|otf|woff2?|eot)$/i.test(item.filename)) {
+        if (/\.typ$/i.test(item.filename)) {
+            var cf = item.filename;
+            var reader = new FileReader();
+            reader.onload = function(e) { batchSaveTextFile(cf, e.target.result, function() { onDone(false); }); };
+            reader.onerror = function() { onDone(false); };
+            reader.readAsText(item.file);
+        } else {
             var fd = new FormData();
             fd.append('document_id', DOC_ID);
             fd.append('file', item.file, item.filename.split('/').pop());
@@ -1580,18 +1617,12 @@ function handleFileUpload(input) {
             x.onload = function() { onDone(true); };
             x.onerror = function() { onDone(true); };
             x.send(fd);
-        } else {
-            var cf = item.filename;
-            var reader = new FileReader();
-            reader.onload = function(e) { batchSaveTextFile(cf, e.target.result, function() { onDone(false); }); };
-            reader.onerror = function() { onDone(false); };
-            reader.readAsText(item.file);
         }
     });
 }
 
 function handleSingleFileUpload(file, filename) {
-    if (/\.(png|jpe?g|gif|webp|svg|pdf|ttf|otf|woff2?|eot)$/i.test(filename)) {
+    if (!/\.typ$/i.test(filename)) {
         uploadImage(file);
         return;
     }
@@ -1654,7 +1685,7 @@ function batchSaveTextFile(filename, content, onComplete) {
         x2.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
         x2.onload = function() { onComplete(); };
         x2.onerror = function() { onComplete(); };
-        x2.send('id=' + existing.id + '&document_id=' + DOC_ID + '&content=' + encodeURIComponent(content));
+        x2.send('filename=' + encodeURIComponent(existing.id) + '&document_id=' + DOC_ID + '&content=' + encodeURIComponent(content));
     } else {
         var x3 = new XMLHttpRequest();
         x3.open('POST', 'api/file_new.php', true);
@@ -1669,7 +1700,7 @@ function batchSaveTextFile(filename, content, onComplete) {
             x4.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
             x4.onload = function() { onComplete(); };
             x4.onerror = function() { onComplete(); };
-            x4.send('id=' + res.id + '&document_id=' + DOC_ID + '&content=' + encodeURIComponent(content));
+            x4.send('filename=' + encodeURIComponent(res.id) + '&document_id=' + DOC_ID + '&content=' + encodeURIComponent(content));
         };
         x3.onerror = function() { onComplete(); };
         x3.send('document_id=' + DOC_ID + '&filename=' + encodeURIComponent(filename));
@@ -1802,11 +1833,30 @@ function setIndicator(msg) {
 }
 
 function saveCurrentFile() {
-    if (activeFile.id === null) {
+    if (activeFile.isAsset) {
+        saveAssetFile(activeFile.filename, editor.getValue());
+    } else if (activeFile.id === null) {
         saveDoc();
     } else {
         saveExtraFile(activeFile.id, editor.getValue());
     }
+}
+
+function saveAssetFile(filename, content) {
+    assetCache[filename] = content;
+    setIndicator('Saving…');
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', 'api/asset_save.php', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onload = function() {
+        isDirty = false;
+        var now = new Date();
+        setIndicator('Saved ' + now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0'));
+        document.getElementById('sidebarSaved').textContent =
+            now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    };
+    xhr.onerror = function() { setIndicator('Error'); };
+    xhr.send('document_id=' + DOC_ID + '&filename=' + encodeURIComponent(filename) + '&content=' + encodeURIComponent(content));
 }
 
 function saveDoc() {
@@ -1845,7 +1895,7 @@ function saveExtraFile(id, content) {
             now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
     };
     xhr.onerror = function() { setIndicator('Error'); };
-    xhr.send('id=' + id + '&document_id=' + DOC_ID + '&content=' + encodeURIComponent(content));
+    xhr.send('filename=' + encodeURIComponent(id) + '&document_id=' + DOC_ID + '&content=' + encodeURIComponent(content));
 }
 
 // ── Compile ───────────────────────────────────────────────────────────────────
@@ -1887,7 +1937,7 @@ function compileDoc() {
                     compileDoc();
                 }
             };
-            xhr.send('id=' + f.id + '&document_id=' + DOC_ID);
+            xhr.send('filename=' + encodeURIComponent(f.id) + '&document_id=' + DOC_ID);
         });
         return;
     }
@@ -1899,18 +1949,25 @@ function compileDoc() {
     var t0 = Date.now();
 
     // Flush current editor content before compiling
-    if (activeFile.id === null) {
+    if (activeFile.isAsset) {
+        assetCache[activeFile.filename] = editor.getValue();
+    } else if (activeFile.id === null) {
         mainContent = editor.getValue();
     } else {
         fileCache[activeFile.id] = editor.getValue();
     }
     lastCompiledContent = editor.getValue();
 
-    // Build extra files array from cache
+    // Build extra files array from cache (.typ DB files + edited asset files)
     var allFiles = [];
     extraFiles.forEach(function(f) {
         var content = fileCache[f.id] !== undefined ? fileCache[f.id] : '';
         allFiles.push({ filename: f.filename, content: content });
+    });
+    Object.keys(assetCache).forEach(function(filename) {
+        if (!allFiles.find(function(f) { return f.filename === filename; })) {
+            allFiles.push({ filename: filename, content: assetCache[filename] });
+        }
     });
 
     var xhr = new XMLHttpRequest();

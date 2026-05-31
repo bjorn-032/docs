@@ -6,24 +6,36 @@ $user = requireAuthApi();
 $db = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 if ($db->connect_error) { echo json_encode(['ok'=>false,'error'=>'DB error']); exit; }
 
-$id      = (int)($_POST['id'] ?? 0);
-$doc_id  = (int)($_POST['document_id'] ?? 0);
-$newname = trim($_POST['filename'] ?? '', '/');
+$doc_id   = (int)($_POST['document_id'] ?? 0);
+$filename = trim($_POST['filename'] ?? '', '/');
+$newname  = trim($_POST['new_filename'] ?? '', '/');
 
-if (!$newname) { echo json_encode(['ok'=>false,'error'=>'Filename required']); exit; }
+if (!$filename || !$newname) { echo json_encode(['ok'=>false,'error'=>'Filename required']); exit; }
+if (strpos($filename, '..') !== false || strpos($newname, '..') !== false) {
+    echo json_encode(['ok'=>false,'error'=>'Invalid filename']); exit;
+}
 if (!preg_match('/^[a-zA-Z0-9._\-]+(\/[a-zA-Z0-9._\-]+)*$/', $newname)) {
     echo json_encode(['ok'=>false,'error'=>'Invalid filename']); exit;
 }
 
-$stmt = $db->prepare(
-    "UPDATE typst_project_files pf
-     JOIN typst_documents d ON d.id = pf.document_id
-     SET pf.filename = ?
-     WHERE pf.id = ? AND pf.document_id = ? AND d.owner = ?"
-);
-$stmt->bind_param("siis", $newname, $id, $doc_id, $user['sub']);
+$stmt = $db->prepare("SELECT id FROM typst_documents WHERE id=? AND owner=?");
+$stmt->bind_param("is", $doc_id, $user['sub']);
 $stmt->execute();
+$stmt->store_result();
+$found = $stmt->num_rows > 0;
 $stmt->close();
 $db->close();
 
-echo json_encode(['ok'=>true, 'filename'=>$newname]);
+if (!$found) { echo json_encode(['ok'=>false,'error'=>'Not found']); exit; }
+
+$base    = __DIR__ . "/../data/{$doc_id}";
+$oldPath = "{$base}/{$filename}";
+$newPath = "{$base}/{$newname}";
+
+if (!is_file($oldPath)) { echo json_encode(['ok'=>false,'error'=>'File not found']); exit; }
+
+$newDir = dirname($newPath);
+if (!is_dir($newDir)) mkdir($newDir, 0777, true);
+rename($oldPath, $newPath);
+
+echo json_encode(['ok' => true, 'filename' => $newname]);

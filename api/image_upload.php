@@ -31,19 +31,7 @@ if ($rel && strpos($rel, '..') === false && preg_match('/^[a-zA-Z0-9._\-]+(\/[a-
     $filename = preg_replace('/[^a-zA-Z0-9._\-]/', '_', basename($file['name']));
 }
 
-$allowed_types = [
-    'image/png','image/jpeg','image/gif','image/webp','image/svg+xml','application/pdf',
-    'font/ttf','font/otf','font/woff','font/woff2',
-    'application/font-woff','application/x-font-ttf','application/x-font-opentype',
-    'application/vnd.ms-fontobject',
-];
-$font_exts = ['ttf','otf','woff','woff2','eot'];
-$file_ext  = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-if (!in_array($file['type'], $allowed_types) && !in_array($file_ext, $font_exts)) {
-    echo json_encode(['ok'=>false,'error'=>'File type not allowed']); exit;
-}
-
-$dir = __DIR__ . "/../uploads/{$doc_id}";
+$dir = __DIR__ . "/../data/{$doc_id}";
 $target_dir = dirname("$dir/$filename");
 if (!is_dir($target_dir)) mkdir($target_dir, 0777, true);
 

@@ -8,21 +8,30 @@ if ($db->connect_error) { echo json_encode(['ok'=>false,'error'=>'DB error']); e
 
 $doc_id = (int)($_POST['document_id'] ?? 0);
 
-$stmt = $db->prepare(
-    "SELECT pf.id, pf.filename, pf.updated_at
-     FROM typst_project_files pf
-     JOIN typst_documents d ON d.id = pf.document_id
-     WHERE pf.document_id=? AND d.owner=?
-     ORDER BY pf.filename"
-);
+$stmt = $db->prepare("SELECT id FROM typst_documents WHERE id=? AND owner=?");
 $stmt->bind_param("is", $doc_id, $user['sub']);
 $stmt->execute();
-$res = $stmt->get_result();
-$files = [];
-while ($row = $res->fetch_assoc()) {
-    $files[] = $row;
-}
+$stmt->store_result();
+$found = $stmt->num_rows > 0;
 $stmt->close();
 $db->close();
 
-echo json_encode(['ok'=>true, 'files'=>$files]);
+if (!$found) { echo json_encode(['ok'=>false,'error'=>'Not found']); exit; }
+
+$dir   = __DIR__ . "/../data/{$doc_id}";
+$files = [];
+if (is_dir($dir)) {
+    $iter = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS)
+    );
+    foreach ($iter as $file) {
+        if (!$file->isFile()) continue;
+        $rel = str_replace('\\', '/', substr($file->getPathname(), strlen($dir) + 1));
+        if (strtolower(pathinfo($rel, PATHINFO_EXTENSION)) !== 'typ') continue;
+        if ($rel === 'main.typ') continue;
+        $files[] = ['id' => $rel, 'filename' => $rel];
+    }
+    usort($files, fn($a, $b) => strcmp($a['filename'], $b['filename']));
+}
+
+echo json_encode(['ok' => true, 'files' => $files]);

@@ -28,13 +28,17 @@ $themeClass = $isDark ? "dark" : "light";
 <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
 <link rel="stylesheet" href="css/dark_mode.php">
 <style>body.dark{background:#141414}body.light{background:#f5f5f5}</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body class="<?= $themeClass ?>">
 
 <div class="topbar">
     <img src="/logo_small_white.png" class="topbar-logo" alt="logo">
     <span class="topbar-title">Fireants Documents</span>
-    <button class="topbar-btn" onclick="newDoc()">
+    <button class="topbar-btn secondary" onclick="openImportModal()">
+        <i class="ri-upload-2-line" style="vertical-align:middle;margin-right:4px"></i>Import
+    </button>
+    <button class="topbar-btn" id="newDocBtn" onclick="newDoc()">
         <i class="ri-add-line" style="vertical-align:middle;margin-right:4px"></i>New Document
     </button>
     <div class="user-avatar-wrap">
@@ -79,9 +83,110 @@ $themeClass = $isDark ? "dark" : "light";
     <?php endif; ?>
 </div>
 
+<!-- Import modal -->
+<div class="modal-overlay" id="importModal" onclick="handleModalClick(event)">
+    <div class="modal-box">
+        <div class="modal-title">Import Project</div>
+        <div class="modal-desc">Upload a <strong>.zip</strong> archive or a <strong>folder</strong> to create a new multi-file project.</div>
+        <div class="import-options">
+            <button class="import-option-btn" onclick="document.getElementById('zipInput').click()">
+                <i class="ri-file-zip-line"></i>
+                <span>Upload .zip</span>
+            </button>
+            <button class="import-option-btn" onclick="document.getElementById('folderInput').click()">
+                <i class="ri-folder-upload-line"></i>
+                <span>Upload Folder</span>
+            </button>
+        </div>
+        <input type="file" id="zipInput" accept=".zip" style="display:none" onchange="handleZipSelect(this)">
+        <input type="file" id="folderInput" style="display:none" webkitdirectory onchange="handleFolderSelect(this)">
+    </div>
+</div>
+
+<!-- Upload progress overlay -->
+<div class="import-progress-overlay" id="importProgress">
+    <div class="import-spinner"></div>
+    <span id="importProgressMsg">Preparing upload…</span>
+</div>
+
 <script>
+function openImportModal() {
+    document.getElementById('importModal').classList.add('open');
+}
+function closeImportModal() {
+    document.getElementById('importModal').classList.remove('open');
+    document.getElementById('zipInput').value = '';
+    document.getElementById('folderInput').value = '';
+}
+function handleModalClick(e) {
+    if (e.target === document.getElementById('importModal')) closeImportModal();
+}
+
+function setProgress(msg) {
+    document.getElementById('importProgressMsg').textContent = msg;
+    document.getElementById('importProgress').classList.add('open');
+}
+function clearProgress() {
+    document.getElementById('importProgress').classList.remove('open');
+}
+
+function handleZipSelect(input) {
+    var file = input.files[0];
+    if (!file) return;
+    closeImportModal();
+    var title = file.name.replace(/\.zip$/i, '');
+    setProgress('Uploading…');
+    var fd = new FormData();
+    fd.append('zip', file, file.name);
+    fd.append('title', title);
+    uploadProject(fd);
+}
+
+function handleFolderSelect(input) {
+    var files = Array.from(input.files);
+    if (files.length === 0) return;
+    closeImportModal();
+
+    var folderName = files[0].webkitRelativePath.split('/')[0];
+    setProgress('Zipping ' + files.length + ' file(s)…');
+
+    var zip = new JSZip();
+    files.forEach(function(f) { zip.file(f.webkitRelativePath, f); });
+
+    zip.generateAsync({type: 'blob'}).then(function(blob) {
+        setProgress('Uploading…');
+        var fd = new FormData();
+        fd.append('zip', blob, folderName + '.zip');
+        fd.append('title', folderName);
+        uploadProject(fd);
+    });
+}
+
+function uploadProject(formData) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', 'api/upload_project.php', true);
+    xhr.onload = function() {
+        clearProgress();
+        try {
+            var res = JSON.parse(xhr.responseText);
+            if (res.ok) {
+                window.location.href = 'editor.php?id=' + res.id;
+            } else {
+                alert('Import failed: ' + (res.error || 'Unknown error'));
+            }
+        } catch(e) {
+            alert('Import failed: unexpected server response');
+        }
+    };
+    xhr.onerror = function() {
+        clearProgress();
+        alert('Import failed: network error');
+    };
+    xhr.send(formData);
+}
+
 function newDoc() {
-    var btn = document.querySelector('.topbar-btn');
+    var btn = document.getElementById('newDocBtn');
     btn.disabled = true;
     btn.textContent = 'Creating…';
     var xhr = new XMLHttpRequest();

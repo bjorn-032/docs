@@ -36,7 +36,7 @@ if ($inDir !== $tmpDir) mkdir($inDir, 0700, true);
 file_put_contents($inFile, $content);
 
 // Copy uploaded images into the temp dir so Typst can find them (preserving subfolders)
-$imgDir = __DIR__ . "/../uploads/{$id}";
+$imgDir = __DIR__ . "/../data/{$id}";
 if (is_dir($imgDir)) {
     $iter = new RecursiveIteratorIterator(
         new RecursiveDirectoryIterator($imgDir, RecursiveDirectoryIterator::SKIP_DOTS)
@@ -59,6 +59,7 @@ if (is_array($extraFiles)) {
         $dest    = "$tmpDir/$name";
         $destDir = dirname($dest);
         if (!is_dir($destDir)) mkdir($destDir, 0700, true);
+        if (is_link($dest)) unlink($dest);
         file_put_contents($dest, $f['content'] ?? '');
     }
 }

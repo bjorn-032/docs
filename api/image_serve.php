@@ -21,7 +21,7 @@ $db->close();
 
 if (!$found) { http_response_code(403); exit; }
 
-$path = __DIR__ . "/../uploads/{$doc_id}/" . $filename;
+$path = __DIR__ . "/../data/{$doc_id}/" . $filename;
 if (!file_exists($path) || !is_file($path)) { http_response_code(404); exit; }
 
 $mime = mime_content_type($path) ?: 'application/octet-stream';

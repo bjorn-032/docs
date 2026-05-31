@@ -32,7 +32,7 @@ if (!$old_name || !$new_name || $old_name === $new_name) {
     echo json_encode(['ok'=>false,'error'=>'Invalid filename']); exit;
 }
 
-$base     = __DIR__ . "/../uploads/{$doc_id}";
+$base     = __DIR__ . "/../data/{$doc_id}";
 $old_path = "$base/$old_name";
 $new_path = "$base/$new_name";
 
