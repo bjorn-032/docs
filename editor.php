@@ -944,7 +944,7 @@ if (SHARE_TOKEN) {
 
 // Helper: append share_token to image_serve GET URLs
 function imageServeUrl(filename) {
-    var url = imageServeUrl(filename);
+    var url = '/api/image_serve.php?document_id=' + DOC_ID + '&filename=' + encodeURIComponent(filename);
     if (SHARE_TOKEN) url += '&share_token=' + encodeURIComponent(SHARE_TOKEN);
     return url;
 }
@@ -1374,15 +1374,20 @@ function addFolder() {
 
 function switchFile(file) {
     // Flush current editor content to cache
+    var assetLoaded = true;
     if (activeFile.isAsset) {
-        assetCache[activeFile.filename] = editor.getValue();
+        if (assetCache[activeFile.filename] !== undefined) {
+            assetCache[activeFile.filename] = editor.getValue();
+        } else {
+            assetLoaded = false; // still loading — don't overwrite with empty editor
+        }
     } else if (activeFile.id === null) {
         // main file: nothing to cache (tracked in mainContent elsewhere)
     } else {
         fileCache[activeFile.id] = editor.getValue();
     }
-    // Save current file immediately
-    saveCurrentFile();
+    // Save current file immediately (skip if asset content never loaded)
+    if (assetLoaded) saveCurrentFile();
 
     activeFile = file;
 
