@@ -577,7 +577,7 @@ body.settings-page .topbar { position: sticky; top: 0; }
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 12px 8px;
+    padding: 14px 16px 8px;
     flex-shrink: 0;
 }
 .panel-title {
@@ -742,6 +742,7 @@ body.settings-page .topbar { position: sticky; top: 0; }
     letter-spacing: 1px;
     color: var(--grayText);
     margin-bottom: 10px;
+    line-height: 20px;
 }
 .sidebar-info-row {
     font-size: 12px;
@@ -1402,3 +1403,26 @@ body.settings-page .topbar { position: sticky; top: 0; }
     border-radius: 7px;
 }
 .git-behind-msg i { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+
+.git-log-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    line-height: 1.5;
+}
+.git-log-row:last-child { border-bottom: none; }
+.git-log-hash {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text);
+    opacity: 0.4;
+    flex-shrink: 0;
+}
+.git-log-subject {
+    color: var(--lighterText);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

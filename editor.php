@@ -436,6 +436,12 @@ html, body { height: 100%; overflow: hidden; }
                     <pre id="gitOutput" class="git-output-box"></pre>
                 </div>
 
+                <!-- Recent commits -->
+                <div id="gitLogWrap" style="display:none" class="sidebar-section" style="flex-shrink:0">
+                    <div class="sidebar-label" style="margin-bottom:8px">Recent Commits</div>
+                    <div id="gitLogList"></div>
+                </div>
+
             </div>
         </div>
         <?php endif; ?>
@@ -1321,7 +1327,7 @@ function makeFileItem(id, filename, isActive, depth) {
     div.className = 'file-item' + (isActive ? ' active' : '');
     div.style.paddingLeft = (12 + depth * 16) + 'px';
     div.innerHTML =
-        '<i class="' + (id === null ? (isActive ? 'ri-file-text-fill' : 'ri-file-text-line') : (isActive ? 'ri-file-fill' : 'ri-file-line')) + '"></i>' +
+        '<i class="' + (isActive ? 'ri-file-text-fill' : 'ri-file-text-line') + '"></i>' +
         '<span class="file-name">' + escHtml(displayName) + '</span>';
     div.onclick = function(e) {
         if (e.target.closest('.file-del')) return;
@@ -1582,10 +1588,10 @@ function makeImageItem(filename, isActive, depth) {
     var isFont  = /\.(ttf|otf|woff2?|eot)$/i.test(filename);
     var isPdf   = /\.pdf$/i.test(filename);
     var isEditable = !isImage && !isPdf && !isFont;
-    var fileIcon  = isPdf ? 'ri-file-pdf-line' : (isFont ? 'ri-font-size' : (isImage ? 'ri-image-fill' : 'ri-file-line'));
-    var fileColor = isPdf ? '#ef5350'          : (isFont ? '#ce93d8'      : (isImage ? '#f48fb1'       : '#9e9e9e'));
+    var fileIcon  = isPdf ? 'ri-file-pdf-line' : (isFont ? 'ri-font-size' : (isImage ? 'ri-image-fill' : (isActive ? 'ri-file-fill' : 'ri-file-line')));
+    var fileColor = isPdf ? '#ef5350'          : (isFont ? '#ce93d8'      : (isImage ? '#f48fb1'       : ''));
     div.innerHTML =
-        '<i class="' + fileIcon + '" style="color:' + fileColor + '"></i>' +
+        '<i class="' + fileIcon + '"' + (fileColor ? ' style="color:' + fileColor + '"' : '') + '></i>' +
         '<span class="file-name">' + escHtml(displayName) + '</span>';
     div.onclick = function(e) {
         if (e.target.closest('.file-del')) return;
@@ -2882,6 +2888,7 @@ function loadGitStatus() {
         hasRepo.style.display = 'flex';
         gitGutterActive = true;
         loadGitGutter();
+        loadGitLog();
         gitHasRemote = !!res.remote;
 
         // Branch select
@@ -3245,6 +3252,28 @@ function gitRevertFile(path, status) {
         }
     };
     xhr.send('id=' + DOC_ID + '&path=' + encodeURIComponent(path));
+}
+
+function loadGitLog() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/git_log.php', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onload = function() {
+        var res; try { res = JSON.parse(xhr.responseText); } catch(e) { return; }
+        var wrap = document.getElementById('gitLogWrap');
+        var list = document.getElementById('gitLogList');
+        if (!res.ok || !res.commits || !res.commits.length) { wrap.style.display = 'none'; return; }
+        list.innerHTML = '';
+        res.commits.forEach(function(c) {
+            var row = document.createElement('div');
+            row.className = 'git-log-row';
+            row.innerHTML = '<span class="git-log-hash">' + escapeHtml(c.hash) + '</span>' +
+                            '<span class="git-log-subject">' + escapeHtml(c.subject) + '</span>';
+            list.appendChild(row);
+        });
+        wrap.style.display = 'block';
+    };
+    xhr.send('id=' + DOC_ID);
 }
 
 function showGitOutput(text) {
