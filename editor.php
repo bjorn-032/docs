@@ -25,6 +25,7 @@ $cmTheme = $isDark ? "dracula" : "default";
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= htmlspecialchars($doc['title']) ?> — Typst Editor</title>
+<link rel="icon" href="logo_small_white.png" type="image/png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
@@ -69,6 +70,56 @@ html, body { height: 100%; overflow: hidden; }
 .light .hint-cite  { color: #0277bd; }
 #pdfDownloadBtn:hover { background: var(--hover) !important; color: var(--text) !important; }
 .editor-shell { height: calc(100vh - 56px); display: flex; }
+.svg-pages {
+    position: absolute;
+    inset: 0;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    background: var(--sidebar);
+}
+.svg-page {
+    width: 794px;
+    display: block;
+    flex-shrink: 0;
+    background: #fff;
+    border-radius: 2px;
+    box-shadow: 0 2px 12px rgba(0,0,0,.35);
+}
+.preview-ctrl-btn {
+    background: none;
+    border: none;
+    color: var(--grayText);
+    cursor: pointer;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    padding: 0;
+    flex-shrink: 0;
+}
+.preview-ctrl-btn:hover { background: var(--hover); color: var(--text); }
+.preview-ctrl-btn i { font-size: 14px; }
+.preview-page-input {
+    width: 36px;
+    text-align: center;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-size: 12px;
+    font-family: inherit;
+    padding: 2px 4px;
+    -moz-appearance: textfield;
+}
+.preview-page-input::-webkit-inner-spin-button,
+.preview-page-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+.preview-page-input:focus { outline: none; border-color: var(--colorTheme); }
 .editor-pane { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 .editor-pane .CodeMirror { flex: 1; height: 100%; font-size: 14px; line-height: 1.7; font-family: "JetBrains Mono", monospace; }
 /* Dracula overrides to match our dark shell */
@@ -260,7 +311,17 @@ html, body { height: 100%; overflow: hidden; }
         <div class="preview-toolbar">
             <i class="ri-file-pdf-line" style="font-size:16px"></i>
             <span id="previewLabel">No output yet — click Compile</span>
-            <button id="pdfDownloadBtn" onclick="downloadPDF()" title="Download PDF" style="display:none;margin-left:auto;background:none;border:none;color:var(--grayText);cursor:pointer;display:none;align-items:center;gap:4px;font-size:12px;padding:2px 6px;border-radius:5px">
+            <div id="previewControls" style="display:none;margin-left:auto;align-items:center;gap:4px">
+                <button class="preview-ctrl-btn" onclick="zoomOut()" title="Zoom out"><i class="ri-subtract-line"></i></button>
+                <span id="zoomLabel" style="font-size:11px;color:var(--grayText);min-width:34px;text-align:center">100%</span>
+                <button class="preview-ctrl-btn" onclick="zoomIn()" title="Zoom in"><i class="ri-add-line"></i></button>
+                <div style="width:1px;height:14px;background:var(--border);margin:0 4px"></div>
+                <input id="pageInput" class="preview-page-input" type="number" min="1" value="1" title="Go to page"
+                       onkeydown="if(event.key==='Enter'){goToPage(parseInt(this.value));this.blur();}"
+                       onblur="goToPage(parseInt(this.value))">
+                <span id="pageTotal" style="font-size:12px;color:var(--grayText)">/ 1</span>
+            </div>
+            <button id="pdfDownloadBtn" onclick="downloadPDF()" title="Download PDF" style="display:none;background:none;border:none;color:var(--grayText);cursor:pointer;align-items:center;gap:4px;font-size:12px;padding:2px 6px;border-radius:5px;margin-left:8px">
                 <i class="ri-download-2-line" style="font-size:15px"></i>
             </button>
         </div>
@@ -675,6 +736,9 @@ var isDirty             = false;
 var lastCompiledContent = null;
 var liveMode            = localStorage.getItem('typst_live') === '1';
 var entryFile           = localStorage.getItem('typst_entry_' + DOC_ID) || 'main.typ';
+var lastCompileBody     = null;
+var previewZoom         = 1.0;
+var pageObserver        = null;
 
 // Multi-file state
 var activeFile       = { id: null, filename: 'main.typ' }; // null = main doc
@@ -1646,8 +1710,10 @@ function compileDoc() {
         }
         if (res.ok) {
             document.getElementById('sidebarStatus').textContent = '✓ OK';
-            document.getElementById('previewLabel').textContent = 'PDF output (' + elapsed + ')';
-            showPDF(res.pdf);
+            var np = res.pages.length;
+            document.getElementById('previewLabel').textContent = np + (np === 1 ? ' page' : ' pages') + ' (' + elapsed + ')';
+            showSVG(res.pages);
+            document.getElementById('pdfDownloadBtn').style.display = 'flex';
         } else {
             document.getElementById('sidebarStatus').textContent = '✗ Error';
             document.getElementById('previewLabel').textContent = 'Compile error';
@@ -1678,52 +1744,135 @@ function compileDoc() {
     }
     var body = 'id=' + DOC_ID + '&content=' + encodeURIComponent(payload_content) + '&entry=' + encodeURIComponent(entryFile);
     if (payload_files.length > 0) body += '&files=' + encodeURIComponent(JSON.stringify(payload_files));
+    lastCompileBody = body;
     xhr.send(body);
 }
 
-function showPDF(b64) {
-    var binary = atob(b64);
-    var bytes  = new Uint8Array(binary.length);
-    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    var blob = new Blob([bytes], {type: 'application/pdf'});
-    var url  = URL.createObjectURL(blob);
+function zoomIn()  { previewZoom = Math.min(3.0, Math.round((previewZoom + 0.25) * 100) / 100); applyZoom(); }
+function zoomOut() { previewZoom = Math.max(0.25, Math.round((previewZoom - 0.25) * 100) / 100); applyZoom(); }
 
+function applyZoom() {
+    var container = document.querySelector('.svg-pages');
+    if (!container) return;
+    var w = Math.round(794 * previewZoom) + 'px';
+    container.querySelectorAll('img.svg-page').forEach(function(img) { img.style.width = w; });
+    document.getElementById('zoomLabel').textContent = Math.round(previewZoom * 100) + '%';
+}
+
+function goToPage(n) {
+    var container = document.querySelector('.svg-pages');
+    if (!container) return;
+    var imgs = container.querySelectorAll('img.svg-page');
+    if (!imgs.length) return;
+    n = Math.max(1, Math.min(n, imgs.length));
+    document.getElementById('pageInput').value = n;
+    imgs[n - 1].scrollIntoView({behavior: 'smooth', block: 'start'});
+}
+
+function setupPageObserver() {
+    if (pageObserver) pageObserver.disconnect();
+    var container = document.querySelector('.svg-pages');
+    if (!container) return;
+    var imgs = container.querySelectorAll('img.svg-page');
+    document.getElementById('pageTotal').textContent = '/ ' + imgs.length;
+    pageObserver = new IntersectionObserver(function(entries) {
+        var best = null, bestRatio = -1;
+        entries.forEach(function(e) { if (e.intersectionRatio > bestRatio) { bestRatio = e.intersectionRatio; best = e.target; } });
+        if (best) document.getElementById('pageInput').value = Array.prototype.indexOf.call(best.parentNode.children, best) + 1;
+    }, { root: container, threshold: [0, 0.1, 0.5, 1.0] });
+    imgs.forEach(function(img) { pageObserver.observe(img); });
+}
+
+function showSVG(pages) {
     var wrap = document.getElementById('previewWrap');
-    var iframe = wrap.querySelector('iframe');
-    if (!iframe) {
-        wrap.innerHTML = '';
-        iframe = document.createElement('iframe');
-        iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;';
-        wrap.appendChild(iframe);
-    } else if (iframe._blobUrl) {
-        URL.revokeObjectURL(iframe._blobUrl);
+    var placeholder = document.getElementById('previewPlaceholder');
+    if (placeholder) placeholder.style.display = 'none';
+    var errDiv = wrap.querySelector('.preview-error');
+    if (errDiv) errDiv.style.display = 'none';
+
+    var container = wrap.querySelector('.svg-pages');
+    if (!container) {
+        container = document.createElement('div');
+        container.className = 'svg-pages';
+        wrap.appendChild(container);
     }
-    iframe._blobUrl = url;
-    iframe.src = url;
-    var btn = document.getElementById('pdfDownloadBtn');
-    btn.style.display = 'flex';
-    btn._blobUrl = url;
+    container.style.display = '';
+
+    var w = Math.round(794 * previewZoom) + 'px';
+    var imgs = container.querySelectorAll('img.svg-page');
+    pages.forEach(function(svgStr, i) {
+        var blob = new Blob([svgStr], {type: 'image/svg+xml'});
+        var url = URL.createObjectURL(blob);
+        if (imgs[i]) {
+            if (imgs[i]._blobUrl) URL.revokeObjectURL(imgs[i]._blobUrl);
+            imgs[i]._blobUrl = url;
+            imgs[i].src = url;
+        } else {
+            var img = document.createElement('img');
+            img.className = 'svg-page';
+            img.style.width = w;
+            img._blobUrl = url;
+            img.src = url;
+            container.appendChild(img);
+        }
+    });
+    for (var i = pages.length; i < imgs.length; i++) {
+        if (imgs[i]._blobUrl) URL.revokeObjectURL(imgs[i]._blobUrl);
+        imgs[i].remove();
+    }
+
+    var controls = document.getElementById('previewControls');
+    controls.style.display = 'flex';
+    setupPageObserver();
 }
 
 function downloadPDF() {
+    if (!lastCompileBody) return;
     var btn = document.getElementById('pdfDownloadBtn');
-    if (!btn._blobUrl) return;
-    var title = document.getElementById('docTitle').value.trim() || 'document';
-    var a = document.createElement('a');
-    a.href = btn._blobUrl;
-    a.download = title + '.pdf';
-    a.click();
+    var icon = btn.querySelector('i');
+    btn.disabled = true;
+    icon.className = 'ri-loader-4-line';
+    icon.style.animation = 'spin 1s linear infinite';
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', 'api/compile.php', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onload = function() {
+        btn.disabled = false;
+        icon.className = 'ri-download-2-line';
+        icon.style.animation = '';
+        var res; try { res = JSON.parse(xhr.responseText); } catch(e) { return; }
+        if (!res.ok) { alert('PDF export failed:\n' + res.error); return; }
+        var binary = atob(res.pdf);
+        var bytes = new Uint8Array(binary.length);
+        for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        var blob = new Blob([bytes], {type: 'application/pdf'});
+        var url = URL.createObjectURL(blob);
+        var title = document.getElementById('docTitle').value.trim() || 'document';
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = title + '.pdf';
+        a.click();
+        setTimeout(function() { URL.revokeObjectURL(url); }, 5000);
+    };
+    xhr.onerror = function() {
+        btn.disabled = false;
+        icon.className = 'ri-download-2-line';
+        icon.style.animation = '';
+    };
+    xhr.send(lastCompileBody + '&format=pdf');
 }
 
 function showError(msg) {
     var wrap = document.getElementById('previewWrap');
+    var container = wrap.querySelector('.svg-pages');
+    if (container) container.style.display = 'none';
     var errDiv = wrap.querySelector('.preview-error');
     if (!errDiv) {
-        wrap.innerHTML = '';
         errDiv = document.createElement('div');
         errDiv.className = 'preview-error';
         wrap.appendChild(errDiv);
     }
+    errDiv.style.display = '';
     errDiv.innerHTML = '<pre>' + escHtml(msg) + '</pre>';
 }
 
