@@ -5,7 +5,9 @@ $user = requireAuth();
 $db = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 if ($db->connect_error) die("DB error");
 
-$id = (int)($_GET['id'] ?? 0);
+// Accept /editor/123 (via nginx rewrite) or legacy ?id=123
+$pathId = (int)(explode('/', trim($_SERVER['REQUEST_URI'], '/'))[1] ?? 0);
+$id = $pathId ?: (int)($_GET['id'] ?? 0);
 $stmt = $db->prepare("SELECT id, title FROM typst_documents WHERE id=? AND owner=?");
 $stmt->bind_param("is", $id, $user['sub']);
 $stmt->execute();
@@ -14,7 +16,7 @@ $doc = $res->fetch_assoc();
 $stmt->close();
 $db->close();
 
-if (!$doc) { header("Location: index.php"); exit; }
+if (!$doc) { header("Location: /"); exit; }
 
 $mainTypPath    = __DIR__ . "/data/{$id}/main.typ";
 $doc['content'] = is_file($mainTypPath) ? file_get_contents($mainTypPath) : '';
@@ -28,11 +30,11 @@ $cmTheme = $isDark ? "dracula" : "default";
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= htmlspecialchars($doc['title']) ?> — Fireants Documents</title>
-<link rel="icon" href="logo_small_white.png" type="image/png">
+<link rel="icon" href="/logo_small_white.png" type="image/png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
-<link rel="stylesheet" href="css/dark_mode.php">
+<link rel="stylesheet" href="/css/dark_mode.php">
 <style>body.dark{background:#141414}body.light{background:#f5f5f5}</style>
 <!-- CodeMirror 5 -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/codemirror.min.css">
@@ -209,7 +211,7 @@ html, body { height: 100%; overflow: hidden; }
 
 <!-- Top bar -->
 <div class="editor-topbar">
-    <button class="editor-topbar-back" onclick="window.location.href='index.php'" title="Back to library">
+    <button class="editor-topbar-back" onclick="window.location.href='/'" title="Back to library">
         <i class="ri-arrow-left-s-line"></i>
     </button>
     <input type="text" class="editor-title-input" id="docTitle"
@@ -223,8 +225,8 @@ html, body { height: 100%; overflow: hidden; }
         <button class="user-avatar" onclick="toggleUserMenu(event)"><?= strtoupper(mb_substr($user['name'], 0, 1)) ?></button>
         <div class="user-menu" id="userMenu">
             <div class="user-menu-header"><?= htmlspecialchars($user['name']) ?></div>
-            <a href="settings.php" class="user-menu-item"><i class="ri-settings-4-line"></i>Settings</a>
-<a href="auth/logout.php" class="user-menu-item"><i class="ri-logout-box-r-line"></i>Logout</a>
+            <a href="/settings" class="user-menu-item"><i class="ri-settings-4-line"></i>Settings</a>
+<a href="/auth/logout.php" class="user-menu-item"><i class="ri-logout-box-r-line"></i>Logout</a>
         </div>
     </div>
 </div>
@@ -270,7 +272,7 @@ html, body { height: 100%; overflow: hidden; }
                 </div>
             </div>
             <div class="file-list" id="fileList"></div>
-            <a href="api/download_zip.php?document_id=<?= (int)$doc['id'] ?>" class="panel-download-btn">
+            <a href="/api/download_zip.php?document_id=<?= (int)$doc['id'] ?>" class="panel-download-btn">
                 <i class="ri-file-zip-line"></i>Export as ZIP
             </a>
         </div>
@@ -788,7 +790,7 @@ function prefetchBibFiles() {
     extraFiles.forEach(function(f) {
         if (fileCache[f.id] !== undefined) return;
         var xhr = new XMLHttpRequest();
-        xhr.open('POST', 'api/file_get.php', true);
+        xhr.open('POST', '/api/file_get.php', true);
         xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
         xhr.onload = function() {
             var res;
@@ -963,7 +965,7 @@ function renderDocSettings() {
 function loadFileList() {
     renderFileList(); // always show main.typ immediately
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', 'api/file_list.php', true);
+    xhr.open('POST', '/api/file_list.php', true);
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
     xhr.onload = function() {
         var res;
@@ -1190,7 +1192,7 @@ function makeFileItem(id, filename, isActive, depth) {
 function moveFile(file, newFilename) {
     if (file.filename === newFilename) return;
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', 'api/file_rename.php', true);
+    xhr.open('POST', '/api/file_rename.php', true);
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
     xhr.onload = function() {
         var res;
@@ -1223,7 +1225,7 @@ function moveFolder(oldPath, newPath) {
     toMove.forEach(function(file) {
         var newFilename = newPath + file.filename.slice(oldPath.length);
         var xhr = new XMLHttpRequest();
-        xhr.open('POST', 'api/file_rename.php', true);
+        xhr.open('POST', '/api/file_rename.php', true);
         xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
         xhr.onload = function() {
             var res;
@@ -1262,7 +1264,7 @@ function deleteFolder(path) {
 
     filesToDelete.forEach(function(file) {
         var xhr = new XMLHttpRequest();
-        xhr.open('POST', 'api/file_delete.php', true);
+        xhr.open('POST', '/api/file_delete.php', true);
         xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
         xhr.onload = function() {
             delete fileCache[file.id];
@@ -1275,7 +1277,7 @@ function deleteFolder(path) {
 
     imagesToDelete.forEach(function(name) {
         var xhr = new XMLHttpRequest();
-        xhr.open('POST', 'api/image_delete.php', true);
+        xhr.open('POST', '/api/image_delete.php', true);
         xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
         xhr.onload = onDone;
         xhr.onerror = onDone;
@@ -1314,7 +1316,7 @@ function switchFile(file) {
             switchingFile = false;
         } else {
             editor.setValue('');
-            fetch('api/image_serve.php?document_id=' + DOC_ID + '&filename=' + encodeURIComponent(file.filename))
+            fetch('/api/image_serve.php?document_id=' + DOC_ID + '&filename=' + encodeURIComponent(file.filename))
                 .then(function(r) { return r.text(); })
                 .then(function(text) {
                     assetCache[file.filename] = text;
@@ -1333,7 +1335,7 @@ function switchFile(file) {
         } else {
             editor.setValue('');
             var xhr = new XMLHttpRequest();
-            xhr.open('POST', 'api/file_get.php', true);
+            xhr.open('POST', '/api/file_get.php', true);
             xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
             xhr.onload = function() {
                 var res;
@@ -1359,7 +1361,7 @@ function addFile() {
     var name = prompt('New file path (e.g. chapter1.typ or chapters/intro.typ):');
     if (!name) return;
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', 'api/file_new.php', true);
+    xhr.open('POST', '/api/file_new.php', true);
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
     xhr.onload = function() {
         var res;
@@ -1379,7 +1381,7 @@ function deleteFile(id) {
     var f = extraFiles.find(function(x) { return x.id == id; });
     if (!confirm('Delete ' + (f ? f.filename : 'this file') + '?')) return;
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', 'api/file_delete.php', true);
+    xhr.open('POST', '/api/file_delete.php', true);
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
     xhr.onload = function() {
         delete fileCache[id];
@@ -1444,7 +1446,7 @@ function openLightbox(filename) {
     var img = document.getElementById('imgLightboxImg');
     var pdfWrap = document.getElementById('pdfLightboxWrap');
     document.getElementById('imgLightboxName').textContent = filename;
-    var url = 'api/image_serve.php?document_id=' + DOC_ID + '&filename=' + encodeURIComponent(filename);
+    var url = '/api/image_serve.php?document_id=' + DOC_ID + '&filename=' + encodeURIComponent(filename);
 
     if (/\.pdf$/i.test(filename)) {
         img.style.display = 'none';
@@ -1504,7 +1506,7 @@ function lightboxEscHandler(e) {
 
 function loadImageList() {
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', 'api/image_list.php', true);
+    xhr.open('POST', '/api/image_list.php', true);
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
     xhr.onload = function() {
         var res;
@@ -1532,7 +1534,7 @@ function uploadImage(file) {
     formData.append('document_id', DOC_ID);
     formData.append('file', file);
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', 'api/image_upload.php', true);
+    xhr.open('POST', '/api/image_upload.php', true);
     xhr.onload = function() {
         var res;
         try { res = JSON.parse(xhr.responseText); } catch(e) { return; }
@@ -1544,7 +1546,7 @@ function uploadImage(file) {
 function deleteImage(filename) {
     if (!confirm('Delete "' + filename + '"?')) return;
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', 'api/image_delete.php', true);
+    xhr.open('POST', '/api/image_delete.php', true);
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
     xhr.onload = function() { loadImageList(); };
     xhr.send('document_id=' + DOC_ID + '&filename=' + encodeURIComponent(filename));
@@ -1553,7 +1555,7 @@ function deleteImage(filename) {
 function moveImage(oldFilename, newFilename) {
     if (oldFilename === newFilename) return;
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', 'api/image_move.php', true);
+    xhr.open('POST', '/api/image_move.php', true);
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
     xhr.onload = function() {
         var res;
@@ -1617,7 +1619,7 @@ function handleFileUpload(input) {
             fd.append('file', item.file, item.filename.split('/').pop());
             fd.append('path', item.filename);
             var x = new XMLHttpRequest();
-            x.open('POST', 'api/image_upload.php', true);
+            x.open('POST', '/api/image_upload.php', true);
             x.onload = function() { onDone(true); };
             x.onerror = function() { onDone(true); };
             x.send(fd);
@@ -1647,7 +1649,7 @@ function handleSingleFileUpload(file, filename) {
                 if (activeFile.id === existing.id) editor.setValue(content);
             } else {
                 var xhr = new XMLHttpRequest();
-                xhr.open('POST', 'api/file_new.php', true);
+                xhr.open('POST', '/api/file_new.php', true);
                 xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
                 xhr.onload = function() {
                     var res;
@@ -1673,7 +1675,7 @@ function batchSaveTextFile(filename, content, onComplete) {
         if (activeFile.id === null) editor.setValue(content);
         var title = document.getElementById('docTitle').value || 'Untitled Document';
         var x1 = new XMLHttpRequest();
-        x1.open('POST', 'api/save.php', true);
+        x1.open('POST', '/api/save.php', true);
         x1.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
         x1.onload = function() { onComplete(); };
         x1.onerror = function() { onComplete(); };
@@ -1685,14 +1687,14 @@ function batchSaveTextFile(filename, content, onComplete) {
         fileCache[existing.id] = content;
         if (activeFile.id === existing.id) editor.setValue(content);
         var x2 = new XMLHttpRequest();
-        x2.open('POST', 'api/file_save.php', true);
+        x2.open('POST', '/api/file_save.php', true);
         x2.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
         x2.onload = function() { onComplete(); };
         x2.onerror = function() { onComplete(); };
         x2.send('filename=' + encodeURIComponent(existing.id) + '&document_id=' + DOC_ID + '&content=' + encodeURIComponent(content));
     } else {
         var x3 = new XMLHttpRequest();
-        x3.open('POST', 'api/file_new.php', true);
+        x3.open('POST', '/api/file_new.php', true);
         x3.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
         x3.onload = function() {
             var res;
@@ -1700,7 +1702,7 @@ function batchSaveTextFile(filename, content, onComplete) {
             if (!res.ok) { onComplete(); return; }
             fileCache[res.id] = content;
             var x4 = new XMLHttpRequest();
-            x4.open('POST', 'api/file_save.php', true);
+            x4.open('POST', '/api/file_save.php', true);
             x4.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
             x4.onload = function() { onComplete(); };
             x4.onerror = function() { onComplete(); };
@@ -1850,7 +1852,7 @@ function saveAssetFile(filename, content) {
     assetCache[filename] = content;
     setIndicator('Saving…');
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', 'api/asset_save.php', true);
+    xhr.open('POST', '/api/asset_save.php', true);
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
     xhr.onload = function() {
         isDirty = false;
@@ -1871,7 +1873,7 @@ function saveDoc() {
     var title   = document.getElementById('docTitle').value || 'Untitled Document';
     var content = (activeFile.id === null) ? editor.getValue() : mainContent;
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', 'api/save.php', true);
+    xhr.open('POST', '/api/save.php', true);
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
     xhr.onload = function() {
         isSaving = false;
@@ -1889,7 +1891,7 @@ function saveExtraFile(id, content) {
     fileCache[id] = content;
     setIndicator('Saving…');
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', 'api/file_save.php', true);
+    xhr.open('POST', '/api/file_save.php', true);
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
     xhr.onload = function() {
         isDirty = false;
@@ -1922,7 +1924,7 @@ function compileDoc() {
         var pending = missing.length;
         missing.forEach(function(f) {
             var xhr = new XMLHttpRequest();
-            xhr.open('POST', 'api/file_get.php', true);
+            xhr.open('POST', '/api/file_get.php', true);
             xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
             xhr.onload = function() {
                 var res; try { res = JSON.parse(xhr.responseText); } catch(e) {}
@@ -1976,7 +1978,7 @@ function compileDoc() {
     });
 
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', 'api/compile.php', true);
+    xhr.open('POST', '/api/compile.php', true);
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
     xhr.onload = function() {
         btn.disabled = false;
@@ -2289,7 +2291,7 @@ function downloadPDF() {
     icon.className = 'ri-loader-4-line';
     icon.style.animation = 'spin 1s linear infinite';
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', 'api/compile.php', true);
+    xhr.open('POST', '/api/compile.php', true);
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
     xhr.onload = function() {
         btn.disabled = false;

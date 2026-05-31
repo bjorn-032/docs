@@ -10,11 +10,11 @@ $themeClass = $isDark ? "dark" : "light";
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Settings — Fireants Documents</title>
-<link rel="icon" href="logo_small_white.png" type="image/png">
+<link rel="icon" href="/logo_small_white.png" type="image/png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
-<link rel="stylesheet" href="css/dark_mode.php">
+<link rel="stylesheet" href="/css/dark_mode.php">
 <style>body.dark{background:#141414}body.light{background:#f5f5f5}</style>
 </head>
 <body class="<?= $themeClass ?>">
@@ -28,7 +28,7 @@ $themeClass = $isDark ? "dark" : "light";
         <button class="user-avatar" onclick="toggleUserMenu(event)"><?= strtoupper(mb_substr($user['name'], 0, 1)) ?></button>
         <div class="user-menu" id="userMenu">
             <div class="user-menu-header"><?= htmlspecialchars($user['name']) ?></div>
-            <a href="auth/logout.php" class="user-menu-item"><i class="ri-logout-box-r-line"></i>Logout</a>
+            <a href="/auth/logout.php" class="user-menu-item"><i class="ri-logout-box-r-line"></i>Logout</a>
         </div>
     </div>
 </div>
@@ -63,7 +63,7 @@ function goBack() {
     if (document.referrer && document.referrer.indexOf(location.hostname) !== -1) {
         history.back();
     } else {
-        location.href = 'index.php';
+        location.href = '/';
     }
 }
 

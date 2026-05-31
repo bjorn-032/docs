@@ -22,11 +22,11 @@ $themeClass = $isDark ? "dark" : "light";
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fireants Documents — Library</title>
-<link rel="icon" href="logo_small_white.png" type="image/png">
+<link rel="icon" href="/logo_small_white.png" type="image/png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
-<link rel="stylesheet" href="css/dark_mode.php">
+<link rel="stylesheet" href="/css/dark_mode.php">
 <style>body.dark{background:#141414}body.light{background:#f5f5f5}</style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
@@ -45,8 +45,8 @@ $themeClass = $isDark ? "dark" : "light";
         <button class="user-avatar" onclick="toggleUserMenu(event)"><?= strtoupper(mb_substr($user['name'], 0, 1)) ?></button>
         <div class="user-menu" id="userMenu">
             <div class="user-menu-header"><?= htmlspecialchars($user['name']) ?></div>
-            <a href="settings.php" class="user-menu-item"><i class="ri-settings-4-line"></i>Settings</a>
-            <a href="auth/logout.php" class="user-menu-item"><i class="ri-logout-box-r-line"></i>Logout</a>
+            <a href="/settings" class="user-menu-item"><i class="ri-settings-4-line"></i>Settings</a>
+            <a href="/auth/logout.php" class="user-menu-item"><i class="ri-logout-box-r-line"></i>Logout</a>
         </div>
     </div>
 </div>
@@ -184,13 +184,13 @@ function handleFolderSelect(input) {
 
 function uploadProject(formData) {
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', 'api/upload_project.php', true);
+    xhr.open('POST', '/api/upload_project.php', true);
     xhr.onload = function() {
         clearProgress();
         try {
             var res = JSON.parse(xhr.responseText);
             if (res.ok) {
-                window.location.href = 'editor.php?id=' + res.id;
+                window.location.href = '/editor/' + res.id;
             } else {
                 alert('Import failed: ' + (res.error || 'Unknown error'));
             }
@@ -233,7 +233,7 @@ function renameDoc() {
     if (!newTitle || newTitle.trim() === _menuDocTitle) return;
     newTitle = newTitle.trim();
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', 'api/rename.php', true);
+    xhr.open('POST', '/api/rename.php', true);
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
     xhr.onload = function() {
         var res = JSON.parse(xhr.responseText);
@@ -247,7 +247,7 @@ function deleteDocFromMenu() {
     closeCardMenu();
     if (!confirm('Delete "' + _menuDocTitle + '"? This cannot be undone.')) return;
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', 'api/delete.php', true);
+    xhr.open('POST', '/api/delete.php', true);
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
     xhr.onload = function() {
         var res = JSON.parse(xhr.responseText);
@@ -260,7 +260,7 @@ function deleteDocFromMenu() {
 function duplicateDoc() {
     closeCardMenu();
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', 'api/duplicate.php', true);
+    xhr.open('POST', '/api/duplicate.php', true);
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
     xhr.onload = function() {
         var res = JSON.parse(xhr.responseText);
@@ -313,11 +313,11 @@ function newDoc() {
     btn.disabled = true;
     btn.textContent = 'Creating…';
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', 'api/new.php', true);
+    xhr.open('POST', '/api/new.php', true);
     xhr.onload = function() {
         var res = JSON.parse(xhr.responseText);
         if (res.ok) {
-            window.location.href = 'editor.php?id=' + res.id;
+            window.location.href = '/editor/' + res.id;
         } else {
             alert('Error: ' + res.error);
             btn.disabled = false;
@@ -327,7 +327,7 @@ function newDoc() {
     xhr.send();
 }
 
-function openDoc(id) { window.location.href = 'editor.php?id=' + id; }
+function openDoc(id) { window.location.href = '/editor/' + id; }
 
 function toggleUserMenu(e) {
     e.stopPropagation();
