@@ -377,6 +377,7 @@ html, body { height: 100%; overflow: hidden; }
         </div>
         <div class="img-lightbox-body">
             <img id="imgLightboxImg" src="" alt="">
+            <div id="pdfLightboxWrap" style="display:none;width:100%;align-self:flex-start;flex-direction:column;align-items:center;gap:8px;padding:8px"></div>
         </div>
     </div>
 </div>
@@ -1274,8 +1275,11 @@ function makeImageItem(filename, depth) {
     div.className = 'file-item';
     div.style.paddingLeft = (12 + depth * 16) + 'px';
     var isFont = /\.(ttf|otf|woff2?|eot)$/i.test(filename);
+    var isPdf  = /\.pdf$/i.test(filename);
+    var fileIcon  = isPdf ? 'ri-file-pdf-line' : (isFont ? 'ri-font-size' : 'ri-image-fill');
+    var fileColor = isPdf ? '#ef5350'          : (isFont ? '#ce93d8'      : '#f48fb1');
     div.innerHTML =
-        '<i class="' + (isFont ? 'ri-font-size' : 'ri-image-fill') + '" style="color:' + (isFont ? '#ce93d8' : '#f48fb1') + '"></i>' +
+        '<i class="' + fileIcon + '" style="color:' + fileColor + '"></i>' +
         '<span class="file-name">' + escHtml(displayName) + '</span>';
     div.onclick = function(e) {
         if (e.target.closest('.file-del')) return;
@@ -1313,8 +1317,46 @@ function makeImageItem(filename, depth) {
 function openLightbox(filename) {
     var lb = document.getElementById('imgLightbox');
     var img = document.getElementById('imgLightboxImg');
+    var pdfWrap = document.getElementById('pdfLightboxWrap');
     document.getElementById('imgLightboxName').textContent = filename;
-    img.src = 'api/image_serve.php?document_id=' + DOC_ID + '&filename=' + encodeURIComponent(filename);
+    var url = 'api/image_serve.php?document_id=' + DOC_ID + '&filename=' + encodeURIComponent(filename);
+
+    if (/\.pdf$/i.test(filename)) {
+        img.style.display = 'none';
+        img.src = '';
+        pdfWrap.style.display = 'flex';
+        pdfWrap.innerHTML = '<span style="color:var(--grayText);font-size:13px">Loading…</span>';
+        fetch(url).then(function(r) { return r.arrayBuffer(); }).then(function(buf) {
+            return pdfjsLib.getDocument({ data: buf }).promise;
+        }).then(function(pdf) {
+            pdfWrap.innerHTML = '';
+            for (var p = 1; p <= pdf.numPages; p++) {
+                (function(pageNum) {
+                    var canvas = document.createElement('canvas');
+                    canvas.style.maxWidth = '100%';
+                    canvas.style.borderRadius = '2px';
+                    canvas.style.boxShadow = '0 2px 8px rgba(0,0,0,.4)';
+                    pdfWrap.appendChild(canvas);
+                    pdf.getPage(pageNum).then(function(page) {
+                        var vp = page.getViewport({ scale: 1.5 });
+                        canvas.width = vp.width;
+                        canvas.height = vp.height;
+                        canvas.style.width = Math.min(vp.width, 700) + 'px';
+                        canvas.style.height = 'auto';
+                        page.render({ canvasContext: canvas.getContext('2d'), viewport: vp });
+                    });
+                })(p);
+            }
+        }).catch(function() {
+            pdfWrap.innerHTML = '<span style="color:#ff6b6b;font-size:13px">Failed to load PDF</span>';
+        });
+    } else {
+        img.style.display = '';
+        img.src = url;
+        pdfWrap.style.display = 'none';
+        pdfWrap.innerHTML = '';
+    }
+
     lb.classList.add('open');
     document.addEventListener('keydown', lightboxEscHandler);
 }
@@ -1324,6 +1366,10 @@ function closeLightbox(e) {
         !e.target.closest('.img-lightbox-close')) return;
     document.getElementById('imgLightbox').classList.remove('open');
     document.getElementById('imgLightboxImg').src = '';
+    document.getElementById('imgLightboxImg').style.display = '';
+    var pdfWrap = document.getElementById('pdfLightboxWrap');
+    pdfWrap.style.display = 'none';
+    pdfWrap.innerHTML = '';
     document.removeEventListener('keydown', lightboxEscHandler);
 }
 
@@ -1446,7 +1492,7 @@ function handleFileUpload(input) {
 }
 
 function handleSingleFileUpload(file, filename) {
-    if (/\.(png|jpe?g|gif|webp|svg|ttf|otf|woff2?|eot)$/i.test(filename)) {
+    if (/\.(png|jpe?g|gif|webp|svg|pdf|ttf|otf|woff2?|eot)$/i.test(filename)) {
         uploadImage(file);
         return;
     }

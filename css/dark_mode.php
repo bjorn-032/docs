@@ -610,11 +610,12 @@ button:focus { outline: 0; }
 .img-lightbox-close:hover { background: var(--hover); color: var(--text); }
 .img-lightbox-body {
     overflow: auto;
+    flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 16px;
-    min-height: 100px;
+    min-height: 0;
 }
 .img-lightbox-body img {
     max-width: 80vw;
