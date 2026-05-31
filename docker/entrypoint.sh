@@ -28,6 +28,10 @@ mariadb --socket=/run/mysqld/mysqld.sock < /var/www/html/docker/init.sql
 mkdir -p /var/www/html/data /var/www/html/ssh_keys
 chown -R www-data:www-data /var/www/html/data /var/www/html/ssh_keys
 
+# Nginx temp dir must be writable by the worker user (www-data)
+mkdir -p /var/lib/nginx/tmp/client_body
+chown -R www-data:www-data /var/lib/nginx/tmp
+
 # Start php-fpm in background
 php-fpm --daemonize
 

@@ -35,19 +35,31 @@ $inDir = dirname($inFile);
 if ($inDir !== $tmpDir) mkdir($inDir, 0700, true);
 file_put_contents($inFile, $content);
 
-// Copy uploaded images into the temp dir so Typst can find them (preserving subfolders)
-$imgDir = __DIR__ . "/../data/{$id}";
+// Symlink project files into the temp dir so Typst can find them (preserving subfolders).
+// Skip .git — it's never needed by typst and can contain hundreds of files.
+$font_exts = ['ttf','otf','woff','woff2','eot'];
+$font_dirs = [$tmpDir => true];
+$imgDir    = __DIR__ . "/../data/{$id}";
 if (is_dir($imgDir)) {
     $iter = new RecursiveIteratorIterator(
-        new RecursiveDirectoryIterator($imgDir, RecursiveDirectoryIterator::SKIP_DOTS)
+        new RecursiveDirectoryIterator($imgDir, RecursiveDirectoryIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::SELF_FIRST
     );
     foreach ($iter as $file) {
+        // Skip .git entirely — prune the subtree via iterator depth trick
+        if ($file->getFilename() === '.git') {
+            $iter->next();
+            continue;
+        }
         if (!$file->isFile()) continue;
         $rel     = substr($file->getPathname(), strlen($imgDir) + 1);
         $dest    = "$tmpDir/$rel";
         $destDir = dirname($dest);
         if (!is_dir($destDir)) mkdir($destDir, 0700, true);
         if (!file_exists($dest) && !is_link($dest)) symlink($file->getPathname(), $dest);
+        if (in_array(strtolower($file->getExtension()), $font_exts)) {
+            $font_dirs[$destDir] = true;
+        }
     }
 }
 
@@ -61,18 +73,6 @@ if (is_array($extraFiles)) {
         if (!is_dir($destDir)) mkdir($destDir, 0700, true);
         if (is_link($dest)) unlink($dest);
         file_put_contents($dest, $f['content'] ?? '');
-    }
-}
-
-// Collect every directory in the temp tree that contains a font file
-$font_exts  = ['ttf','otf','woff','woff2','eot'];
-$font_dirs  = [$tmpDir => true];
-$iter2 = new RecursiveIteratorIterator(
-    new RecursiveDirectoryIterator($tmpDir, RecursiveDirectoryIterator::SKIP_DOTS)
-);
-foreach ($iter2 as $f2) {
-    if ($f2->isFile() && in_array(strtolower($f2->getExtension()), $font_exts)) {
-        $font_dirs[dirname($f2->getPathname())] = true;
     }
 }
 $font_path_args = implode('', array_map(function($d) {
