@@ -1,13 +1,44 @@
 <?php
 require __DIR__ . '/auth/session.php';
-$user = requireAuth();
+
+// Accept /editor/123 (via nginx rewrite) or legacy ?id=123
+$pathParts = explode('/', trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/'));
+$pathId = (int)($pathParts[1] ?? 0);
+$id = $pathId ?: (int)($_GET['id'] ?? 0);
+
+// Auth: session first, then share token
+$shareToken  = null;
+$shareAccess = null;
+
+_startSession();
+if (!empty($_SESSION['user_sub'])) {
+    $user = ['sub' => $_SESSION['user_sub'], 'name' => $_SESSION['user_name']];
+} elseif (!empty($_GET['token'])) {
+    $shareToken = preg_replace('/[^a-f0-9]/', '', $_GET['token']);
+    $db2 = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+    if ($db2->connect_error) die("DB error");
+    $stmt2 = $db2->prepare(
+        "SELECT td.owner, td.id as doc_id, ds.access
+         FROM document_shares ds
+         JOIN typst_documents td ON td.id = ds.document_id
+         WHERE ds.token = ? AND ds.document_id = ?"
+    );
+    $stmt2->bind_param("si", $shareToken, $id);
+    $stmt2->execute();
+    $shareRow = $stmt2->get_result()->fetch_assoc();
+    $stmt2->close();
+    $db2->close();
+    if (!$shareRow) { http_response_code(403); die("Invalid or expired share link."); }
+    $user        = ['sub' => $shareRow['owner'], 'name' => 'Guest'];
+    $shareAccess = $shareRow['access'];
+} else {
+    header('Location: /auth/login.php');
+    exit;
+}
 
 $db = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 if ($db->connect_error) die("DB error");
 
-// Accept /editor/123 (via nginx rewrite) or legacy ?id=123
-$pathId = (int)(explode('/', trim($_SERVER['REQUEST_URI'], '/'))[1] ?? 0);
-$id = $pathId ?: (int)($_GET['id'] ?? 0);
 $stmt = $db->prepare("SELECT id, title FROM typst_documents WHERE id=? AND owner=?");
 $stmt->bind_param("is", $id, $user['sub']);
 $stmt->execute();
@@ -214,21 +245,44 @@ html, body { height: 100%; overflow: hidden; }
     <button class="editor-topbar-back" onclick="window.location.href='/'" title="Back to library">
         <i class="ri-arrow-left-s-line"></i>
     </button>
+    <?php if ($shareAccess === 'view'): ?>
+    <span class="editor-title-input" id="docTitle"><?= htmlspecialchars($doc['title']) ?></span>
+    <?php else: ?>
     <input type="text" class="editor-title-input" id="docTitle"
            value="<?= htmlspecialchars($doc['title']) ?>"
            onblur="saveDoc()" placeholder="Document title">
+    <?php endif; ?>
     <span class="save-indicator" id="saveIndicator"></span>
+    <?php if ($shareAccess !== null): ?>
+    <span class="shared-badge"><?= $shareAccess === 'edit' ? 'Shared — Edit' : 'Shared — View only' ?></span>
+    <?php endif; ?>
     <button class="compile-btn" id="compileBtn" onclick="compileDoc()">
         <i class="ri-play-fill"></i>Compile
     </button>
+    <?php if (!$shareToken): ?>
+    <div class="share-btn-wrap" id="shareBtnWrap">
+        <button class="share-btn" id="shareBtn" onclick="toggleSharePopup(event)">
+            <i class="ri-share-line"></i>Share
+        </button>
+        <div class="share-popup" id="sharePopup" onclick="event.stopPropagation()">
+            <div id="sharePopupBody"></div>
+        </div>
+    </div>
+    <?php endif; ?>
+    <?php if ($shareToken): ?>
+    <button class="topbar-icon-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Toggle light/dark mode">
+        <i class="<?= $isDark ? 'ri-sun-line' : 'ri-moon-line' ?>"></i>
+    </button>
+    <?php else: ?>
     <div class="user-avatar-wrap">
         <button class="user-avatar" onclick="toggleUserMenu(event)"><?= strtoupper(mb_substr($user['name'], 0, 1)) ?></button>
         <div class="user-menu" id="userMenu">
             <div class="user-menu-header"><?= htmlspecialchars($user['name']) ?></div>
             <a href="/settings" class="user-menu-item"><i class="ri-settings-4-line"></i>Settings</a>
-<a href="/auth/logout.php" class="user-menu-item"><i class="ri-logout-box-r-line"></i>Logout</a>
+            <a href="/auth/logout.php" class="user-menu-item"><i class="ri-logout-box-r-line"></i>Logout</a>
         </div>
     </div>
+    <?php endif; ?>
 </div>
 
 <!-- Editor shell -->
@@ -254,6 +308,7 @@ html, body { height: 100%; overflow: hidden; }
         <div class="panel-pane" id="panelFiles">
             <div class="panel-header">
                 <span class="panel-title">Files</span>
+                <?php if ($shareAccess !== 'view'): ?>
                 <div style="display:flex;gap:2px">
                     <button class="panel-icon-btn" onclick="addFile()" title="New file">
                         <i class="ri-add-line"></i>
@@ -270,9 +325,10 @@ html, body { height: 100%; overflow: hidden; }
                     <input type="file" id="fileUploadInput" style="display:none" multiple onchange="handleFileUpload(this)">
                     <input type="file" id="folderUploadInput" style="display:none" webkitdirectory multiple onchange="handleFileUpload(this)">
                 </div>
+                <?php endif; ?>
             </div>
             <div class="file-list" id="fileList"></div>
-            <a href="/api/download_zip.php?document_id=<?= (int)$doc['id'] ?>" class="panel-download-btn">
+            <a href="/api/download_zip.php?document_id=<?= (int)$doc['id'] ?><?= $shareToken ? '&share_token=' . urlencode($shareToken) : '' ?>" class="panel-download-btn">
                 <i class="ri-file-zip-line"></i>Export as ZIP
             </a>
         </div>
@@ -282,7 +338,7 @@ html, body { height: 100%; overflow: hidden; }
             <div class="panel-header">
                 <span class="panel-title">Document Settings</span>
             </div>
-            <div style="padding:12px 14px;display:flex;flex-direction:column;gap:20px">
+            <div style="padding:12px 14px;display:flex;flex-direction:column;gap:20px<?= $shareAccess === 'view' ? ';opacity:.45;pointer-events:none' : '' ?>">
                 <div>
                     <div class="sidebar-label" style="margin-bottom:8px">Entry file</div>
                     <select id="entryFileSelect" class="doc-settings-select" onchange="setEntryFile(this.value)"></select>
@@ -850,6 +906,7 @@ var editor = CodeMirror.fromTextArea(document.getElementById('codeEditor'), {
     autofocus: true,
     tabSize: 2,
     indentWithTabs: false,
+    readOnly: <?= $shareAccess === 'view' ? 'true' : 'false' ?>,
     matchBrackets: true,
     autoCloseBrackets: true,
     extraKeys: {
@@ -871,6 +928,26 @@ var editor = CodeMirror.fromTextArea(document.getElementById('codeEditor'), {
 
 // ── State ─────────────────────────────────────────────────────────────────────
 var DOC_ID              = <?= (int)$doc['id'] ?>;
+var SHARE_TOKEN         = <?= json_encode($shareToken) ?>;
+var SHARE_ACCESS        = <?= json_encode($shareAccess) ?>;
+
+// Automatically append share_token to every POST request when in shared mode
+if (SHARE_TOKEN) {
+    var _origSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.send = function(body) {
+        if (typeof body === 'string' && body.indexOf('share_token=') === -1) {
+            body += '&share_token=' + encodeURIComponent(SHARE_TOKEN);
+        }
+        _origSend.call(this, body);
+    };
+}
+
+// Helper: append share_token to image_serve GET URLs
+function imageServeUrl(filename) {
+    var url = imageServeUrl(filename);
+    if (SHARE_TOKEN) url += '&share_token=' + encodeURIComponent(SHARE_TOKEN);
+    return url;
+}
 var saveTimer           = null;
 var liveTimer           = null;
 var isSaving            = false;
@@ -1316,7 +1393,7 @@ function switchFile(file) {
             switchingFile = false;
         } else {
             editor.setValue('');
-            fetch('/api/image_serve.php?document_id=' + DOC_ID + '&filename=' + encodeURIComponent(file.filename))
+            fetch(imageServeUrl(file.filename))
                 .then(function(r) { return r.text(); })
                 .then(function(text) {
                     assetCache[file.filename] = text;
@@ -1446,7 +1523,7 @@ function openLightbox(filename) {
     var img = document.getElementById('imgLightboxImg');
     var pdfWrap = document.getElementById('pdfLightboxWrap');
     document.getElementById('imgLightboxName').textContent = filename;
-    var url = '/api/image_serve.php?document_id=' + DOC_ID + '&filename=' + encodeURIComponent(filename);
+    var url = imageServeUrl(filename);
 
     if (/\.pdf$/i.test(filename)) {
         img.style.display = 'none';
@@ -1774,6 +1851,7 @@ editor.on('change', function() {
     if (switchingFile) return;
     if (activeFile.id === null) mainContent = editor.getValue();
     updateStats();
+    if (SHARE_ACCESS === 'view') return; // view-only: no saves
     isDirty = true;
     clearTimeout(saveTimer);
     clearTimeout(liveTimer);
@@ -2546,6 +2624,16 @@ window.addEventListener('beforeunload', function(e) {
     if (isDirty) { e.preventDefault(); e.returnValue = ''; }
 });
 
+function toggleTheme() {
+    var isLight = document.body.classList.contains('dark');
+    var val = isLight ? '1' : '0';
+    document.cookie = 'darkmode=' + val + '; path=/; SameSite=Lax; max-age=' + (365 * 24 * 3600);
+    document.body.className = isLight ? 'light' : 'dark';
+    editor.setOption('theme', isLight ? 'default' : 'dracula');
+    var btn = document.getElementById('themeToggleBtn');
+    if (btn) btn.querySelector('i').className = isLight ? 'ri-moon-line' : 'ri-sun-line';
+}
+
 function toggleUserMenu(e) {
     e.stopPropagation();
     document.getElementById('userMenu').classList.toggle('open');
@@ -2553,7 +2641,113 @@ function toggleUserMenu(e) {
 document.addEventListener('click', function() {
     var m = document.getElementById('userMenu');
     if (m) m.classList.remove('open');
+    var sp = document.getElementById('sharePopup');
+    if (sp) sp.classList.remove('open');
 });
+
+// ── Share popup ───────────────────────────────────────────────────────────────
+var SHARE_BASE_URL = '<?= (isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'] ?>/shared/';
+var shareState = null; // null = unknown, false = no share, {token, access} = has share
+
+function toggleSharePopup(e) {
+    e.stopPropagation();
+    var popup = document.getElementById('sharePopup');
+    if (popup.classList.contains('open')) {
+        popup.classList.remove('open');
+        return;
+    }
+    popup.classList.add('open');
+    if (shareState === null) {
+        renderSharePopup('loading');
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/share_get.php', true);
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+        xhr.onload = function() {
+            var res; try { res = JSON.parse(xhr.responseText); } catch(e) { return; }
+            if (res.ok) { shareState = res.share; renderSharePopup(shareState); }
+        };
+        xhr.send('document_id=' + DOC_ID);
+    } else {
+        renderSharePopup(shareState);
+    }
+}
+
+function renderSharePopup(state) {
+    var body = document.getElementById('sharePopupBody');
+    if (state === 'loading') {
+        body.innerHTML = '<div class="share-popup-loading"><i class="ri-loader-4-line" style="animation:spin 1s linear infinite"></i> Loading…</div>';
+        return;
+    }
+    if (!state) {
+        body.innerHTML =
+            '<div class="share-popup-empty">' +
+                '<i class="ri-links-line" style="font-size:28px;color:var(--grayText)"></i>' +
+                '<p>No share link yet.</p>' +
+                '<button class="share-create-btn" onclick="createShareLink()"><i class="ri-add-line"></i>Create Link</button>' +
+            '</div>';
+        return;
+    }
+    var url = SHARE_BASE_URL + escHtml(state.token);
+    var isEdit = state.access === 'edit';
+    body.innerHTML =
+        '<div class="share-popup-label">Share link</div>' +
+        '<div class="share-url-row">' +
+            '<span class="share-url-text" id="shareUrlText">' + url + '</span>' +
+            '<button class="share-copy-btn" onclick="copyShareLink()" title="Copy link"><i class="ri-file-copy-line"></i></button>' +
+        '</div>' +
+        '<div class="share-popup-label" style="margin-top:12px">Access</div>' +
+        '<div class="share-access-row">' +
+            '<button class="share-access-btn' + (!isEdit ? ' active' : '') + '" onclick="setShareAccess(\'view\')" id="shareAccessView">View only</button>' +
+            '<button class="share-access-btn' + (isEdit ? ' active' : '') + '" onclick="setShareAccess(\'edit\')" id="shareAccessEdit">Can edit</button>' +
+        '</div>' +
+        '<button class="share-danger-btn" onclick="deleteShareLink()"><i class="ri-delete-bin-line"></i>Remove link</button>';
+}
+
+function createShareLink() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/share_create.php', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onload = function() {
+        var res; try { res = JSON.parse(xhr.responseText); } catch(e) { return; }
+        if (res.ok) { shareState = { token: res.token, access: res.access }; renderSharePopup(shareState); }
+    };
+    xhr.send('document_id=' + DOC_ID + '&access=view');
+}
+
+function deleteShareLink() {
+    if (!confirm('Remove the share link? Anyone with the link will lose access.')) return;
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/share_delete.php', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onload = function() {
+        var res; try { res = JSON.parse(xhr.responseText); } catch(e) { return; }
+        if (res.ok) { shareState = null; renderSharePopup(false); }
+    };
+    xhr.send('document_id=' + DOC_ID);
+}
+
+function setShareAccess(val) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/share_create.php', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onload = function() {
+        var res; try { res = JSON.parse(xhr.responseText); } catch(e) { return; }
+        if (res.ok) { shareState = { token: res.token, access: res.access }; renderSharePopup(shareState); }
+    };
+    xhr.send('document_id=' + DOC_ID + '&access=' + encodeURIComponent(val));
+}
+
+function copyShareLink() {
+    var url = SHARE_BASE_URL + shareState.token;
+    navigator.clipboard.writeText(url).then(function() {
+        var btn = document.querySelector('.share-copy-btn');
+        if (!btn) return;
+        var orig = btn.innerHTML;
+        btn.innerHTML = '<i class="ri-check-line"></i>';
+        btn.style.color = 'var(--colorThemeLight)';
+        setTimeout(function() { btn.innerHTML = orig; btn.style.color = ''; }, 1800);
+    });
+}
 </script>
 </body>
 </html>

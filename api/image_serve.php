@@ -1,6 +1,6 @@
 <?php
 require __DIR__ . '/../auth/session.php';
-$user = requireAuth();
+$user = requireAuthApi();
 
 $doc_id   = (int)($_GET['document_id'] ?? 0);
 $filename = ltrim($_GET['filename'] ?? '', '/');
