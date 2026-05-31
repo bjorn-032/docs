@@ -199,6 +199,10 @@ html, body { height: 100%; overflow: hidden; }
 .light .cm-typst-escape   { color: #c2185b; }
 .light .cm-typst-url      { color: #0277bd; }
 .light .cm-typst-operator { color: #c2185b; }
+.cm-error-line { background: rgba(255,80,80,0.18) !important; }
+.light .cm-error-line { background: rgba(200,0,0,0.10) !important; }
+.cm-error-mark { text-decoration: underline wavy #ff5555; text-decoration-skip-ink: none; }
+.light .cm-error-mark { text-decoration: underline wavy #cc0000; }
 </style>
 </head>
 <body class="<?= $themeClass ?>">
@@ -1941,6 +1945,7 @@ function compileDoc() {
         });
         return;
     }
+    clearErrorMarks();
     var btn = document.getElementById('compileBtn');
     btn.disabled = true;
     btn.innerHTML = '<i class="ri-refresh-line" style="animation:spin 1s linear infinite"></i>Compiling…';
@@ -2312,8 +2317,21 @@ function downloadPDF() {
     xhr.send(lastCompileBody + '&format=pdf');
 }
 
+var _errorMarks = [];
+
+function clearErrorMarks() {
+    _errorMarks.forEach(function(m) { m.clear(); });
+    _errorMarks = [];
+    var lineCount = editor.lineCount();
+    for (var i = 0; i < lineCount; i++) {
+        editor.removeLineClass(i, 'background', 'cm-error-line');
+    }
+}
+
 function showError(msg) {
     var wrap = document.getElementById('previewWrap');
+    var placeholder = document.getElementById('previewPlaceholder');
+    if (placeholder) placeholder.style.display = 'none';
     var container = wrap.querySelector('.svg-pages');
     if (container) container.style.display = 'none';
     var errDiv = wrap.querySelector('.preview-error');
@@ -2324,6 +2342,29 @@ function showError(msg) {
     }
     errDiv.style.display = '';
     errDiv.innerHTML = '<pre>' + escHtml(msg) + '</pre>';
+
+    // Parse Typst error locations: "  ┌─ filename:LINE:COL"
+    var re = /┌─\s+\S+:(\d+):(\d+)/g, m;
+    var first = null;
+    while ((m = re.exec(msg)) !== null) {
+        var line = parseInt(m[1], 10) - 1;
+        var col  = parseInt(m[2], 10) - 1;
+        if (line < 0 || line >= editor.lineCount()) continue;
+        editor.addLineClass(line, 'background', 'cm-error-line');
+        var lineText = editor.getLine(line) || '';
+        var markEnd = Math.min(col + 1, lineText.length);
+        if (col < lineText.length) {
+            _errorMarks.push(editor.markText(
+                {line: line, ch: col},
+                {line: line, ch: markEnd},
+                {className: 'cm-error-mark'}
+            ));
+        }
+        if (first === null) first = {line: line, ch: col};
+    }
+    if (first !== null) {
+        editor.scrollIntoView({line: first.line, ch: first.ch}, 80);
+    }
 }
 
 function escHtml(s) {
