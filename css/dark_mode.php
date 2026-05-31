@@ -625,6 +625,19 @@ button:focus { outline: 0; }
     display: block;
 }
 
+.panel-download-btn {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: var(--grayText);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+    transition: color .15s, background .15s;
+}
+.panel-download-btn:hover { background: var(--hover); color: var(--text); }
+.panel-download-btn i { font-size: 15px; }
 .file-section-label {
     font-size: 10px;
     font-weight: 600;

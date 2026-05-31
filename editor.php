@@ -217,7 +217,7 @@ html, body { height: 100%; overflow: hidden; }
         <div class="user-menu" id="userMenu">
             <div class="user-menu-header"><?= htmlspecialchars($user['name']) ?></div>
             <a href="settings.php" class="user-menu-item"><i class="ri-settings-4-line"></i>Settings</a>
-            <a href="auth/logout.php" class="user-menu-item"><i class="ri-logout-box-r-line"></i>Logout</a>
+<a href="auth/logout.php" class="user-menu-item"><i class="ri-logout-box-r-line"></i>Logout</a>
         </div>
     </div>
 </div>
@@ -263,6 +263,9 @@ html, body { height: 100%; overflow: hidden; }
                 </div>
             </div>
             <div class="file-list" id="fileList"></div>
+            <a href="api/download_zip.php?document_id=<?= (int)$doc['id'] ?>" class="panel-download-btn">
+                <i class="ri-file-zip-line"></i>Export as ZIP
+            </a>
         </div>
 
         <!-- Doc settings panel -->
