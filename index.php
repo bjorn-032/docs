@@ -21,7 +21,7 @@ $themeClass = $isDark ? "dark" : "light";
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Typst Editor — Library</title>
+<title>Fireants Documents — Library</title>
 <link rel="icon" href="logo_small_white.png" type="image/png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
@@ -33,7 +33,7 @@ $themeClass = $isDark ? "dark" : "light";
 
 <div class="topbar">
     <img src="/logo_small_white.png" class="topbar-logo" alt="logo">
-    <span class="topbar-title">Typst Editor</span>
+    <span class="topbar-title">Fireants Documents</span>
     <button class="topbar-btn" onclick="newDoc()">
         <i class="ri-add-line" style="vertical-align:middle;margin-right:4px"></i>New Document
     </button>

@@ -24,7 +24,7 @@ $cmTheme = $isDark ? "dracula" : "default";
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title><?= htmlspecialchars($doc['title']) ?> — Typst Editor</title>
+<title><?= htmlspecialchars($doc['title']) ?> — Fireants Documents</title>
 <link rel="icon" href="logo_small_white.png" type="image/png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
@@ -734,7 +734,7 @@ var liveTimer           = null;
 var isSaving            = false;
 var isDirty             = false;
 var lastCompiledContent = null;
-var liveMode            = localStorage.getItem('typst_live') === '1';
+var liveMode            = localStorage.getItem('typst_live') !== '0';
 var entryFile           = localStorage.getItem('typst_entry_' + DOC_ID) || 'main.typ';
 var lastCompileBody     = null;
 var previewZoom         = 1.0;
@@ -1886,6 +1886,13 @@ function escHtml(s) {
     var preview = document.getElementById('previewPane');
     var dragging = false;
     var startX, startW;
+
+    var saved = localStorage.getItem('typst_preview_w');
+    if (saved) {
+        var w = Math.max(150, Math.min(parseInt(saved, 10), window.innerWidth - 300));
+        preview.style.width = w + 'px';
+    }
+
     handle.addEventListener('mousedown', function(e) {
         dragging = true;
         startX = e.clientX;
@@ -1904,6 +1911,7 @@ function escHtml(s) {
             dragging = false;
             document.body.style.cursor = '';
             document.body.style.userSelect = '';
+            localStorage.setItem('typst_preview_w', preview.offsetWidth);
             editor.refresh();
         }
     });
