@@ -1,10 +1,21 @@
 <?php
 header('Content-Type: application/json');
 require __DIR__ . '/../auth/session.php';
-requireAuthApi();
+$user = requireAuthApi();
 
 $content    = $_POST['content'] ?? '';
 $id         = (int)($_POST['id'] ?? 0);
+
+$db = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+if ($db->connect_error) { echo json_encode(['ok'=>false,'error'=>'DB error']); exit; }
+$stmt = $db->prepare("SELECT id FROM typst_documents WHERE id=? AND owner=?");
+$stmt->bind_param("is", $id, $user['sub']);
+$stmt->execute();
+$stmt->store_result();
+$found = $stmt->num_rows > 0;
+$stmt->close();
+$db->close();
+if (!$found) { echo json_encode(['ok'=>false,'error'=>'Not found']); exit; }
 $filesJson  = $_POST['files'] ?? '';
 $extraFiles = $filesJson ? json_decode($filesJson, true) : [];
 $format     = ($_POST['format'] ?? 'svg') === 'pdf' ? 'pdf' : 'svg';

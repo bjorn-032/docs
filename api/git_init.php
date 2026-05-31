@@ -29,6 +29,10 @@ if ($code !== 0) {
 $output[] = trim($out ?: $err);
 
 if ($remoteUrl) {
+    if (!preg_match('#^(https://|ssh://|git@)#i', $remoteUrl)) {
+        echo json_encode(['ok' => false, 'error' => 'Remote URL must use https, ssh, or git@ protocol']);
+        exit;
+    }
     // Add remote
     [$code,, $err] = runGit(['remote', 'add', 'origin', $remoteUrl], $dir, $sshEnv);
     if ($code !== 0) {

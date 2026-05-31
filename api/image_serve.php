@@ -29,4 +29,6 @@ $mime = mime_content_type($path) ?: 'application/octet-stream';
 header('Content-Type: ' . $mime);
 header('Content-Length: ' . filesize($path));
 header('Cache-Control: private, max-age=3600');
+header('X-Content-Type-Options: nosniff');
+header('Content-Security-Policy: sandbox');
 readfile($path);

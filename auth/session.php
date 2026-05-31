@@ -52,9 +52,10 @@ function _getShareTokenUser(bool $requireEdit): ?array {
         exit;
     }
 
-    // Validate the requested document matches what the token grants access to
+    // Share tokens are only valid for requests that name a specific document.
+    // Rejecting id-less requests prevents tokens from acting on endpoints like new.php.
     $reqDocId = (int)($_POST['document_id'] ?? $_POST['id'] ?? $_GET['document_id'] ?? $_GET['id'] ?? 0);
-    if ($reqDocId !== 0 && $reqDocId !== (int)$row['document_id']) {
+    if ($reqDocId === 0 || $reqDocId !== (int)$row['document_id']) {
         http_response_code(403);
         echo json_encode(['ok' => false, 'error' => 'Token not valid for this document']);
         exit;

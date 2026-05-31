@@ -9,6 +9,10 @@ $branch    = preg_replace('/[^a-zA-Z0-9_.\-]/', '', trim($_POST['branch'] ?? 'ma
 $title     = trim($_POST['title'] ?? '');
 
 if (!$remoteUrl) { echo json_encode(['ok' => false, 'error' => 'Remote URL required']); exit; }
+if (!preg_match('#^(https://|ssh://|git@)#i', $remoteUrl)) {
+    echo json_encode(['ok' => false, 'error' => 'Remote URL must use https, ssh, or git@ protocol']);
+    exit;
+}
 if (strpos($branch, '..') !== false) $branch = 'main';
 
 // Derive a title from the URL if not provided
