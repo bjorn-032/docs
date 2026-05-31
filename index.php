@@ -54,7 +54,11 @@ $themeClass = $isDark ? "dark" : "light";
 <div class="library-body">
     <div class="library-header">
         <h1>Your Documents</h1>
-        <span style="font-size:13px;color:var(--grayText)"><?= count($docs) ?> document<?= count($docs) !== 1 ? 's' : '' ?></span>
+        <span id="docCount" style="font-size:13px;color:var(--grayText)"><?= count($docs) ?> document<?= count($docs) !== 1 ? 's' : '' ?></span>
+        <div class="search-wrap">
+            <i class="ri-search-line"></i>
+            <input type="text" id="searchInput" placeholder="Search…" oninput="filterDocs(this.value)" autocomplete="off">
+        </div>
     </div>
 
     <?php if (empty($docs)): ?>
@@ -183,6 +187,30 @@ function uploadProject(formData) {
         alert('Import failed: network error');
     };
     xhr.send(formData);
+}
+
+document.addEventListener('keydown', function(e) {
+    var inp = document.getElementById('searchInput');
+    if (!inp) return;
+    if (e.key === 'Escape' && inp.value) { inp.value = ''; filterDocs(''); inp.blur(); }
+    else if ((e.key === 'f' || e.key === 'F') && (e.ctrlKey || e.metaKey) && document.activeElement !== inp) {
+        e.preventDefault(); inp.focus(); inp.select();
+    }
+});
+
+function filterDocs(q) {
+    q = q.trim().toLowerCase();
+    var cards = document.querySelectorAll('.doc-card');
+    var visible = 0;
+    cards.forEach(function(card) {
+        var title = card.querySelector('.doc-card-title').textContent.toLowerCase();
+        var show = !q || title.includes(q);
+        card.style.display = show ? '' : 'none';
+        if (show) visible++;
+    });
+    var total = cards.length;
+    document.getElementById('docCount').textContent =
+        (q ? visible + ' of ' + total : total) + ' document' + (total !== 1 ? 's' : '');
 }
 
 function newDoc() {

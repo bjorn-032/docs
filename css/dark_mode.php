@@ -267,13 +267,42 @@ button:focus { outline: 0; }
 .library-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 16px;
     margin-bottom: 32px;
 }
 .library-header h1 {
     font-size: 22px;
     font-weight: 600;
+    flex-shrink: 0;
 }
+.search-wrap {
+    margin-left: auto;
+    max-width: 360px;
+    width: 280px;
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+.search-wrap i {
+    position: absolute;
+    left: 12px;
+    font-size: 17px;
+    color: var(--grayText);
+    pointer-events: none;
+}
+.search-wrap input {
+    width: 100%;
+    background: var(--coninfo);
+    border: none;
+    border-radius: 9px;
+    padding: 9px 14px 9px 36px;
+    font-family: inherit;
+    font-size: 14px;
+    color: var(--text);
+    outline: none;
+}
+.light .search-wrap input { background: #e2e2e2; }
+.search-wrap input::placeholder { color: var(--grayText); }
 .doc-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
