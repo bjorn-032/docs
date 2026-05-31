@@ -24,6 +24,8 @@ $extraFiles = $filesJson ? json_decode($filesJson, true) : [];
 $entry = trim($_POST['entry'] ?? 'main.typ', '/');
 if ($entry === '' || strpos($entry, '..') !== false) $entry = 'main.typ';
 
+$imgDir = __DIR__ . "/../data/{$id}";
+
 $uid     = uniqid('', true);
 $tmpDir  = "/tmp/typst_shared_{$id}_{$uid}";
 $inFile  = "$tmpDir/$entry";
@@ -47,19 +49,25 @@ $inDir = dirname($inFile);
 if ($inDir !== $tmpDir) mkdir($inDir, 0700, true);
 file_put_contents($inFile, $content);
 
-// Symlink uploaded assets from the project data directory
-$imgDir = __DIR__ . "/../data/{$id}";
+// Symlink uploaded assets and collect font dirs in a single pass.
+$font_exts = ['ttf','otf','woff','woff2','eot'];
+$font_dirs = [$tmpDir => true];
 if (is_dir($imgDir)) {
     $iter = new RecursiveIteratorIterator(
-        new RecursiveDirectoryIterator($imgDir, RecursiveDirectoryIterator::SKIP_DOTS)
+        new RecursiveDirectoryIterator($imgDir, RecursiveDirectoryIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::SELF_FIRST
     );
     foreach ($iter as $file) {
+        if ($file->getFilename() === '.git') { $iter->next(); continue; }
         if (!$file->isFile()) continue;
         $rel     = substr($file->getPathname(), strlen($imgDir) + 1);
         $dest    = "$tmpDir/$rel";
         $destDir = dirname($dest);
         if (!is_dir($destDir)) mkdir($destDir, 0700, true);
         if (!file_exists($dest)) symlink($file->getPathname(), $dest);
+        if (in_array(strtolower($file->getExtension()), $font_exts)) {
+            $font_dirs[$destDir] = true;
+        }
     }
 }
 
@@ -76,16 +84,6 @@ if (is_array($extraFiles)) {
     }
 }
 
-$font_exts = ['ttf','otf','woff','woff2','eot'];
-$font_dirs = [$tmpDir => true];
-$iter2 = new RecursiveIteratorIterator(
-    new RecursiveDirectoryIterator($tmpDir, RecursiveDirectoryIterator::SKIP_DOTS)
-);
-foreach ($iter2 as $f2) {
-    if ($f2->isFile() && in_array(strtolower($f2->getExtension()), $font_exts)) {
-        $font_dirs[dirname($f2->getPathname())] = true;
-    }
-}
 $font_path_args = implode('', array_map(function($d) {
     return ' --font-path ' . escapeshellarg($d);
 }, array_keys($font_dirs)));
@@ -99,4 +97,5 @@ if ($exit !== 0 || !file_exists($outFile)) {
     echo json_encode(['ok'=>false, 'error'=>implode("\n", $output)]);
     exit;
 }
+
 echo json_encode(['ok'=>true, 'pdf'=>base64_encode(file_get_contents($outFile))]);
