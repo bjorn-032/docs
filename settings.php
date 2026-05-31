@@ -1,6 +1,7 @@
 <?php
 require __DIR__ . '/auth/session.php';
 $user = requireAuth();
+$userEmail = htmlspecialchars($_SESSION['user_email'] ?? '');
 
 $isDark     = ($_COOKIE["darkmode"] ?? "1") !== "1";
 $themeClass = $isDark ? "dark" : "light";
@@ -17,7 +18,7 @@ $themeClass = $isDark ? "dark" : "light";
 <link rel="stylesheet" href="/css/dark_mode.php">
 <style>body.dark{background:#141414}body.light{background:#f5f5f5}</style>
 </head>
-<body class="<?= $themeClass ?>">
+<body class="<?= $themeClass ?> settings-page">
 
 <div class="topbar">
     <button class="topbar-icon-btn" onclick="goBack()" title="Back">
@@ -56,6 +57,41 @@ $themeClass = $isDark ? "dark" : "light";
         </div>
     </div>
 
+    <!-- Git: SSH Key -->
+    <div class="settings-card">
+        <div class="settings-section-title">Git — SSH Key</div>
+        <p style="font-size:13px;color:var(--grayText);line-height:1.6;margin-bottom:16px">
+            Add this public key to your GitHub or GitLab account to allow pushing from Fireants Documents.
+        </p>
+        <textarea id="sshPubKey" class="git-pub-key-box" rows="4" readonly spellcheck="false">Loading…</textarea>
+        <div class="git-btn-row">
+            <button class="git-secondary-btn" onclick="copyPubKey()"><i class="ri-file-copy-line"></i> Copy</button>
+            <button class="git-secondary-btn" onclick="regenKey()"><i class="ri-refresh-line"></i> Regenerate</button>
+        </div>
+    </div>
+
+    <!-- Git: Author -->
+    <div class="settings-card">
+        <div class="settings-section-title">Git — Author</div>
+        <p style="font-size:13px;color:var(--grayText);line-height:1.6;margin-bottom:16px">
+            Name and email used in commit messages.
+        </p>
+        <div style="display:flex;flex-direction:column;gap:14px">
+            <div>
+                <div class="settings-input-label">Name</div>
+                <input type="text" id="gitAuthorName" class="settings-input" value="<?= htmlspecialchars($user['name']) ?>">
+            </div>
+            <div>
+                <div class="settings-input-label">Email</div>
+                <input type="email" id="gitAuthorEmail" class="settings-input" value="<?= $userEmail ?>">
+            </div>
+        </div>
+        <div style="margin-top:16px;display:flex;align-items:center;gap:12px">
+            <button class="settings-save-btn" onclick="saveGitAuthor()">Save</button>
+            <span id="gitAuthorStatus" style="font-size:12px;color:var(--grayText)"></span>
+        </div>
+    </div>
+
 </div>
 
 <script>
@@ -84,6 +120,76 @@ function setTheme(isLight) {
     document.getElementById('themeLight').classList.toggle('active', isLight);
     document.getElementById('themeDark').classList.toggle('active', !isLight);
 }
+
+// ── Git settings ──────────────────────────────────────────────────────────────
+function loadSshKey() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/git_key_get.php', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onload = function() {
+        var res; try { res = JSON.parse(xhr.responseText); } catch(e) { return; }
+        if (res.ok) document.getElementById('sshPubKey').value = res.public_key;
+        else document.getElementById('sshPubKey').value = 'Error: ' + res.error;
+    };
+    xhr.send('');
+}
+
+function copyPubKey() {
+    var ta = document.getElementById('sshPubKey');
+    navigator.clipboard.writeText(ta.value).then(function() {
+        var btn = event.currentTarget;
+        var orig = btn.innerHTML;
+        btn.innerHTML = '<i class="ri-check-line"></i> Copied';
+        btn.style.color = 'var(--colorThemeLight)';
+        setTimeout(function() { btn.innerHTML = orig; btn.style.color = ''; }, 2000);
+    });
+}
+
+function regenKey() {
+    if (!confirm('Regenerate your SSH key? The old public key will stop working on any git hosts where it was added.')) return;
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/git_key_regen.php', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onload = function() {
+        var res; try { res = JSON.parse(xhr.responseText); } catch(e) { return; }
+        if (res.ok) document.getElementById('sshPubKey').value = res.public_key;
+        else alert('Error: ' + res.error);
+    };
+    xhr.send('');
+}
+
+function loadGitAuthor() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/git_settings_get.php', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onload = function() {
+        var res; try { res = JSON.parse(xhr.responseText); } catch(e) { return; }
+        if (res.ok) {
+            document.getElementById('gitAuthorName').value  = res.commit_name  || '';
+            document.getElementById('gitAuthorEmail').value = res.commit_email || '';
+        }
+    };
+    xhr.send('');
+}
+
+function saveGitAuthor() {
+    var name  = document.getElementById('gitAuthorName').value.trim();
+    var email = document.getElementById('gitAuthorEmail').value.trim();
+    var status = document.getElementById('gitAuthorStatus');
+    if (!name || !email) { status.textContent = 'Name and email required'; return; }
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/git_settings_save.php', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onload = function() {
+        var res; try { res = JSON.parse(xhr.responseText); } catch(e) { return; }
+        status.textContent = res.ok ? 'Saved.' : ('Error: ' + res.error);
+        if (res.ok) setTimeout(function() { status.textContent = ''; }, 2500);
+    };
+    xhr.send('commit_name=' + encodeURIComponent(name) + '&commit_email=' + encodeURIComponent(email));
+}
+
+loadSshKey();
+loadGitAuthor();
 </script>
 </body>
 </html>

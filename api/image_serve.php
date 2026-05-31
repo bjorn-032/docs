@@ -5,7 +5,8 @@ $user = requireAuthApi();
 $doc_id   = (int)($_GET['document_id'] ?? 0);
 $filename = ltrim($_GET['filename'] ?? '', '/');
 if (!$doc_id || !$filename) { http_response_code(400); exit; }
-if (strpos($filename, '..') !== false || !preg_match('/^[a-zA-Z0-9._\-]+(\/[a-zA-Z0-9._\-]+)*$/', $filename)) {
+if (strpos($filename, '..') !== false || strpos($filename, "\0") !== false ||
+    $filename === '' || $filename[0] === '/') {
     http_response_code(400); exit;
 }
 

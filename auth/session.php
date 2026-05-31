@@ -15,7 +15,7 @@ function requireAuth(): array {
         header('Location: /auth/login.php');
         exit;
     }
-    return ['sub' => $_SESSION['user_sub'], 'name' => $_SESSION['user_name']];
+    return ['sub' => $_SESSION['user_sub'], 'name' => $_SESSION['user_name'], 'email' => $_SESSION['user_email'] ?? ''];
 }
 
 // Looks up a share token from POST or GET, validates it against the
@@ -72,7 +72,7 @@ function _getShareTokenUser(bool $requireEdit): ?array {
 function requireAuthApi(bool $requireEdit = false): array {
     _startSession();
     if (!empty($_SESSION['user_sub'])) {
-        return ['sub' => $_SESSION['user_sub'], 'name' => $_SESSION['user_name']];
+        return ['sub' => $_SESSION['user_sub'], 'name' => $_SESSION['user_name'], 'email' => $_SESSION['user_email'] ?? ''];
     }
     $tokenUser = _getShareTokenUser($requireEdit);
     if ($tokenUser !== null) return $tokenUser;

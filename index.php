@@ -107,8 +107,8 @@ $themeClass = $isDark ? "dark" : "light";
 <div class="modal-overlay" id="importModal" onclick="handleModalClick(event)">
     <div class="modal-box">
         <div class="modal-title">Import Project</div>
-        <div class="modal-desc">Upload a <strong>.zip</strong> archive or a <strong>folder</strong> to create a new multi-file project.</div>
-        <div class="import-options">
+        <div class="modal-desc" id="importModalDesc">Upload a <strong>.zip</strong> archive, a <strong>folder</strong>, or clone a <strong>git repository</strong>.</div>
+        <div class="import-options" id="importOptions">
             <button class="import-option-btn" onclick="document.getElementById('zipInput').click()">
                 <i class="ri-file-zip-line"></i>
                 <span>Upload .zip</span>
@@ -117,6 +117,29 @@ $themeClass = $isDark ? "dark" : "light";
                 <i class="ri-folder-upload-line"></i>
                 <span>Upload Folder</span>
             </button>
+            <button class="import-option-btn" onclick="showGitCloneForm()">
+                <i class="ri-git-branch-line"></i>
+                <span>Clone from Git</span>
+            </button>
+        </div>
+        <!-- Git clone sub-form -->
+        <div id="gitCloneForm" style="display:none">
+            <div style="display:flex;flex-direction:column;gap:12px">
+                <div>
+                    <div class="settings-input-label" style="margin-bottom:6px">Repository URL</div>
+                    <input type="text" id="cloneUrl" class="git-text-input" placeholder="https://github.com/user/repo or git@github.com:user/repo" style="font-size:13px;padding:9px 11px">
+                </div>
+                <div>
+                    <div class="settings-input-label" style="margin-bottom:6px">Branch</div>
+                    <input type="text" id="cloneBranch" class="git-text-input" value="main" placeholder="main" style="font-size:13px;padding:9px 11px">
+                </div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:16px">
+                <button class="git-secondary-btn" onclick="hideGitCloneForm()" style="flex:0 0 auto;padding:9px 16px">Back</button>
+                <button class="git-action-btn" id="cloneSubmitBtn" onclick="submitGitClone()" style="font-size:13px">
+                    <i class="ri-git-branch-line"></i> Clone
+                </button>
+            </div>
         </div>
         <input type="file" id="zipInput" accept=".zip" style="display:none" onchange="handleZipSelect(this)">
         <input type="file" id="folderInput" style="display:none" webkitdirectory onchange="handleFolderSelect(this)">
@@ -137,6 +160,60 @@ function closeImportModal() {
     document.getElementById('importModal').classList.remove('open');
     document.getElementById('zipInput').value = '';
     document.getElementById('folderInput').value = '';
+    hideGitCloneForm();
+}
+
+function showGitCloneForm() {
+    document.getElementById('importOptions').style.display = 'none';
+    document.getElementById('importModalDesc').style.display = 'none';
+    document.getElementById('gitCloneForm').style.display = 'block';
+    document.getElementById('cloneUrl').focus();
+}
+
+function hideGitCloneForm() {
+    document.getElementById('gitCloneForm').style.display = 'none';
+    document.getElementById('importOptions').style.display = 'flex';
+    document.getElementById('importModalDesc').style.display = '';
+}
+
+function submitGitClone() {
+    var url    = document.getElementById('cloneUrl').value.trim();
+    var branch = document.getElementById('cloneBranch').value.trim() || 'main';
+    if (!url) { document.getElementById('cloneUrl').focus(); return; }
+
+    var btn = document.getElementById('cloneSubmitBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ri-loader-4-line"></i> Cloning…';
+    closeImportModal();
+    setProgress('Cloning repository…');
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/git_clone_new.php', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onload = function() {
+        clearProgress();
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ri-git-branch-line"></i> Clone';
+        try {
+            var res = JSON.parse(xhr.responseText);
+            if (res.ok) {
+                window.location.href = '/editor/' + res.id;
+            } else {
+                alert('Clone failed: ' + (res.error || 'Unknown error'));
+                openImportModal();
+                showGitCloneForm();
+            }
+        } catch(e) {
+            alert('Clone failed: unexpected server response');
+        }
+    };
+    xhr.onerror = function() {
+        clearProgress();
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ri-git-branch-line"></i> Clone';
+        alert('Clone failed: network error');
+    };
+    xhr.send('remote_url=' + encodeURIComponent(url) + '&branch=' + encodeURIComponent(branch));
 }
 function handleModalClick(e) {
     if (e.target === document.getElementById('importModal')) closeImportModal();

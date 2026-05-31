@@ -22,7 +22,10 @@ $dir = __DIR__ . "/../data/{$doc_id}";
 $images = [];
 if (is_dir($dir)) {
     $iter = new RecursiveIteratorIterator(
-        new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS)
+        new RecursiveCallbackFilterIterator(
+            new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS),
+            function($f) { return $f->getFilename() !== '.git'; }
+        )
     );
     foreach ($iter as $file) {
         if (!$file->isFile()) continue;

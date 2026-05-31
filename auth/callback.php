@@ -75,11 +75,12 @@ if (empty($userinfo['sub'])) {
 
 // ── Persist session ───────────────────────────────────────────────────────────
 session_regenerate_id(true);
-$_SESSION['user_sub']  = $userinfo['sub'];
-$_SESSION['user_name'] = $userinfo['name']
+$_SESSION['user_sub']   = $userinfo['sub'];
+$_SESSION['user_name']  = $userinfo['name']
     ?? $userinfo['preferred_username']
     ?? $userinfo['email']
     ?? $userinfo['sub'];
+$_SESSION['user_email'] = $userinfo['email'] ?? '';
 
 header('Location: /');
 exit;

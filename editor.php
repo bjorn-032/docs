@@ -296,6 +296,11 @@ html, body { height: 100%; overflow: hidden; }
         <button class="activity-btn" id="actStats" onclick="switchPanel('stats')" title="Document stats">
             <i class="ri-bar-chart-2-line"></i>
         </button>
+        <?php if (!$shareToken): ?>
+        <button class="activity-btn" id="actGit" onclick="switchPanel('git')" title="Git">
+            <i class="ri-git-branch-line"></i>
+        </button>
+        <?php endif; ?>
         <button class="activity-btn" id="actDocSettings" onclick="switchPanel('docSettings')" style="margin-top:auto" title="Document settings">
             <i class="ri-settings-4-line"></i>
         </button>
@@ -354,6 +359,86 @@ html, body { height: 100%; overflow: hidden; }
                 </div>
             </div>
         </div>
+
+        <?php if (!$shareToken): ?>
+        <!-- Git panel -->
+        <div class="panel-pane" id="panelGit" style="display:none;flex-direction:column;overflow-y:auto">
+            <div class="panel-header" style="flex-shrink:0">
+                <span class="panel-title">Git</span>
+                <button class="panel-icon-btn" onclick="loadGitStatus()" title="Refresh"><i class="ri-refresh-line"></i></button>
+            </div>
+
+            <div id="gitLoading" style="padding:14px 16px;font-size:12px;color:var(--grayText)">Loading…</div>
+
+            <!-- No repo -->
+            <div id="gitNoRepo" style="display:none;flex-direction:column;gap:10px;padding:0 14px 14px">
+                <p style="font-size:12px;color:var(--grayText);line-height:1.6;margin:4px 0 6px">
+                    Initialize git or clone a remote repository into this project.
+                </p>
+                <div>
+                    <div class="sidebar-label" style="margin-bottom:6px">Remote URL</div>
+                    <input id="gitRemoteUrl" type="text" class="git-text-input" placeholder="https://github.com/user/repo or git@github.com:user/repo">
+                </div>
+                <div>
+                    <div class="sidebar-label" style="margin-bottom:6px">Branch</div>
+                    <input id="gitBranchInput" type="text" class="git-text-input" value="main" placeholder="main">
+                </div>
+                <button class="git-action-btn" onclick="gitInit()">
+                    <i class="ri-git-repository-line"></i> Initialize / Clone
+                </button>
+            </div>
+
+            <!-- Has repo -->
+            <div id="gitHasRepo" style="display:none;flex-direction:column">
+
+                <!-- Branch + pull -->
+                <div class="sidebar-section" style="border-top:none;flex-shrink:0">
+                    <div class="sidebar-label" style="margin-bottom:8px">Branch</div>
+                    <div style="display:flex;align-items:center;gap:6px">
+                        <select id="gitBranchSelect" class="doc-settings-select" style="flex:1" onchange="gitSwitchBranch(this.value)"></select>
+                        <button class="panel-icon-btn" onclick="gitPull()" title="Pull"><i class="ri-arrow-down-line"></i></button>
+                    </div>
+                    <div id="gitRemoteInfo" class="git-info-row" style="margin-top:6px"></div>
+                    <div id="gitAheadBehind" class="git-info-row" style="margin-top:2px"></div>
+                </div>
+
+                <!-- Changes -->
+                <div class="sidebar-section" style="flex-shrink:0">
+                    <div class="sidebar-label" style="margin-bottom:8px">Changes</div>
+                    <div id="gitChangesList"></div>
+                    <div id="gitNoChanges" style="display:none;font-size:12px;color:var(--grayText)">No changes</div>
+                </div>
+
+                <!-- Commit -->
+                <div class="sidebar-section" style="flex-shrink:0">
+                    <!-- Behind warning — shown instead of commit form when remote has new commits -->
+                    <div id="gitBehindWarn" style="display:none;flex-direction:column;gap:8px">
+                        <div class="git-behind-msg">
+                            <i class="ri-error-warning-line"></i>
+                            <span id="gitBehindText">Remote has new commits. Sync before committing.</span>
+                        </div>
+                        <button class="git-action-btn" id="gitSyncBtn" onclick="gitSync()">
+                            <i class="ri-refresh-line"></i> Sync with Remote
+                        </button>
+                    </div>
+                    <!-- Normal commit form -->
+                    <div id="gitCommitForm">
+                        <textarea id="gitCommitMsg" class="git-commit-input" placeholder="Commit message…" rows="3"></textarea>
+                        <button class="git-action-btn" id="gitCommitBtn" onclick="gitCommitPush()" style="margin-top:8px">
+                            <i class="ri-git-commit-line"></i> <span id="gitCommitBtnLabel">Commit &amp; Push</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Output -->
+                <div id="gitOutputWrap" style="display:none" class="sidebar-section" style="flex-shrink:0">
+                    <div class="sidebar-label" style="margin-bottom:6px">Output</div>
+                    <pre id="gitOutput" class="git-output-box"></pre>
+                </div>
+
+            </div>
+        </div>
+        <?php endif; ?>
 
         <!-- Stats panel -->
         <div class="panel-pane" id="panelStats" style="display:none">
@@ -902,6 +987,7 @@ var editor = CodeMirror.fromTextArea(document.getElementById('codeEditor'), {
     mode: "typst",
     theme: "<?= $cmTheme ?>",
     lineNumbers: true,
+    gutters: ["CodeMirror-git-gutter", "CodeMirror-linenumbers"],
     lineWrapping: true,
     autofocus: true,
     tabSize: 2,
@@ -994,23 +1080,32 @@ function switchPanel(name) {
         panel.classList.add('collapsed');
         panelVisible = false;
     } else {
-        document.getElementById('panelFiles').style.display = name === 'files' ? 'flex' : 'none';
-        document.getElementById('panelStats').style.display = name === 'stats' ? 'flex' : 'none';
+        document.getElementById('panelFiles').style.display      = name === 'files'       ? 'flex' : 'none';
+        document.getElementById('panelStats').style.display      = name === 'stats'       ? 'flex' : 'none';
         document.getElementById('panelDocSettings').style.display = name === 'docSettings' ? 'flex' : 'none';
+        var gitPanel = document.getElementById('panelGit');
+        if (gitPanel) gitPanel.style.display = name === 'git' ? 'flex' : 'none';
         panel.classList.remove('collapsed');
         panelVisible = true;
         activePanel = name;
         if (name === 'docSettings') renderDocSettings();
+        if (name === 'git') loadGitStatus();
     }
-    var filesActive = activePanel === 'files' && panelVisible;
-    var statsActive = activePanel === 'stats' && panelVisible;
+    var filesActive       = activePanel === 'files'       && panelVisible;
+    var statsActive       = activePanel === 'stats'       && panelVisible;
     var docSettingsActive = activePanel === 'docSettings' && panelVisible;
+    var gitActive         = activePanel === 'git'         && panelVisible;
     document.getElementById('actFiles').classList.toggle('active', filesActive);
     document.getElementById('actFiles').querySelector('i').className = filesActive ? 'ri-folder-open-fill' : 'ri-folder-open-line';
     document.getElementById('actStats').classList.toggle('active', statsActive);
     document.getElementById('actStats').querySelector('i').className = statsActive ? 'ri-bar-chart-2-fill' : 'ri-bar-chart-2-line';
     document.getElementById('actDocSettings').classList.toggle('active', docSettingsActive);
     document.getElementById('actDocSettings').querySelector('i').className = docSettingsActive ? 'ri-settings-4-fill' : 'ri-settings-4-line';
+    var actGitBtn = document.getElementById('actGit');
+    if (actGitBtn) {
+        actGitBtn.classList.toggle('active', gitActive);
+        actGitBtn.querySelector('i').className = gitActive ? 'ri-git-branch-fill' : 'ri-git-branch-line';
+    }
     editor.refresh();
 }
 
@@ -1373,6 +1468,8 @@ function addFolder() {
 }
 
 function switchFile(file) {
+    // Cancel any pending auto-save so it can't fire after activeFile changes
+    clearTimeout(saveTimer);
     // Flush current editor content to cache
     var assetLoaded = true;
     if (activeFile.isAsset) {
@@ -1434,6 +1531,7 @@ function switchFile(file) {
     renderFileList();
     updateStats();
     updateCompileBtn();
+    if (gitGutterActive) loadGitGutter();
 }
 
 // mainContent tracks the in-memory main file content
@@ -1929,6 +2027,7 @@ function saveCurrentFile() {
     } else {
         saveExtraFile(activeFile.id, editor.getValue());
     }
+    if (gitGutterActive) loadGitGutter();
 }
 
 function saveAssetFile(filename, content) {
@@ -2752,6 +2851,412 @@ function copyShareLink() {
         btn.style.color = 'var(--colorThemeLight)';
         setTimeout(function() { btn.innerHTML = orig; btn.style.color = ''; }, 1800);
     });
+}
+
+// ── Git panel ─────────────────────────────────────────────────────────────────
+var gitHasRemote = false;
+var gitBehindCount = 0;
+
+function loadGitStatus() {
+    var loading    = document.getElementById('gitLoading');
+    var noRepo     = document.getElementById('gitNoRepo');
+    var hasRepo    = document.getElementById('gitHasRepo');
+    if (!loading) return;
+    loading.style.display = 'block';
+    noRepo.style.display  = 'none';
+    hasRepo.style.display = 'none';
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/git_status.php', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onload = function() {
+        loading.style.display = 'none';
+        var res; try { res = JSON.parse(xhr.responseText); } catch(e) { return; }
+        if (!res.ok) { loading.style.display = 'block'; loading.textContent = 'Error: ' + res.error; return; }
+        if (!res.initialized) {
+            noRepo.style.display = 'flex';
+            gitGutterActive = false;
+            clearGitGutter();
+            return;
+        }
+        hasRepo.style.display = 'flex';
+        gitGutterActive = true;
+        loadGitGutter();
+        gitHasRemote = !!res.remote;
+
+        // Branch select
+        loadGitBranches(res.branch);
+
+        // Remote info
+        var remoteEl = document.getElementById('gitRemoteInfo');
+        if (res.remote) {
+            var display = res.remote.replace(/\/\/[^@]+@/, '//'); // hide token in HTTPS URLs
+            remoteEl.innerHTML = '<i class="ri-git-repository-line" style="font-size:13px"></i>' + escapeHtml(display);
+        } else {
+            remoteEl.innerHTML = '<i class="ri-git-repository-line" style="font-size:13px"></i><span style="color:var(--grayText)">No remote</span>';
+        }
+
+        // Ahead/behind
+        gitBehindCount = (res.behind !== null) ? res.behind : 0;
+        var abEl = document.getElementById('gitAheadBehind');
+        if (res.ahead !== null && res.behind !== null) {
+            var parts = [];
+            if (res.ahead  > 0) parts.push('<span style="color:#4caf50">↑' + res.ahead  + ' ahead</span>');
+            if (res.behind > 0) parts.push('<span style="color:#ef5350">↓' + res.behind + ' behind</span>');
+            abEl.innerHTML = parts.length ? parts.join(' · ') : '<span style="color:var(--grayText)">Up to date</span>';
+        } else {
+            abEl.innerHTML = '';
+        }
+
+        // Show/hide sync warning vs commit form
+        var behindWarn  = document.getElementById('gitBehindWarn');
+        var commitForm  = document.getElementById('gitCommitForm');
+        var behindText  = document.getElementById('gitBehindText');
+        if (gitBehindCount > 0 && gitHasRemote) {
+            behindText.textContent = '↓ ' + gitBehindCount + ' commit' + (gitBehindCount > 1 ? 's' : '') + ' behind. Sync before committing.';
+            behindWarn.style.display = 'flex';
+            commitForm.style.display = 'none';
+        } else {
+            behindWarn.style.display = 'none';
+            commitForm.style.display = 'block';
+        }
+
+        // Changes
+        var list = document.getElementById('gitChangesList');
+        var none = document.getElementById('gitNoChanges');
+        list.innerHTML = '';
+        if (res.changes && res.changes.length) {
+            none.style.display = 'none';
+            res.changes.forEach(function(c) {
+                var row = document.createElement('div');
+                row.className = 'git-change-row';
+                var badgeClass = {M:'git-badge-M', A:'git-badge-A', D:'git-badge-D', R:'git-badge-R'}[c.status] || 'git-badge-unknown';
+                var label = c.status === '?' ? 'Delete' : 'Revert';
+                row.innerHTML =
+                    '<input type="checkbox" checked class="git-file-check">' +
+                    '<span class="git-badge ' + badgeClass + '">' + escapeHtml(c.status) + '</span>' +
+                    '<span class="git-change-path" title="' + escapeHtml(c.path) + '">' + escapeHtml(c.path) + '</span>' +
+                    '<button class="git-revert-btn" title="' + label + ' changes">' +
+                        '<i class="ri-arrow-go-back-line"></i>' +
+                    '</button>';
+                row.querySelector('.git-revert-btn').addEventListener('click', function() {
+                    gitRevertFile(c.path, c.status);
+                });
+                list.appendChild(row);
+            });
+        } else {
+            none.style.display = 'block';
+        }
+
+        // Commit button label
+        document.getElementById('gitCommitBtnLabel').textContent = gitHasRemote ? 'Commit & Push' : 'Commit';
+    };
+    xhr.send('id=' + DOC_ID);
+}
+
+function loadGitBranches(currentBranch) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/git_branches.php', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onload = function() {
+        var res; try { res = JSON.parse(xhr.responseText); } catch(e) { return; }
+        if (!res.ok) return;
+        var sel = document.getElementById('gitBranchSelect');
+        sel.innerHTML = '';
+        var current = currentBranch || res.current;
+        res.branches.forEach(function(b) {
+            var opt = document.createElement('option');
+            opt.value = b;
+            opt.textContent = b;
+            if (b === current) opt.selected = true;
+            sel.appendChild(opt);
+        });
+        // If current branch not in list, add it
+        if (current && !res.branches.includes(current)) {
+            var opt = document.createElement('option');
+            opt.value = current; opt.textContent = current; opt.selected = true;
+            sel.insertBefore(opt, sel.firstChild);
+        }
+    };
+    xhr.send('id=' + DOC_ID);
+}
+
+function gitInit() {
+    var url    = document.getElementById('gitRemoteUrl').value.trim();
+    var branch = document.getElementById('gitBranchInput').value.trim() || 'main';
+    var btn    = document.querySelector('#gitNoRepo .git-action-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ri-loader-4-line"></i> Working…';
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/git_init.php', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onload = function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ri-git-repository-line"></i> Initialize / Clone';
+        var res; try { res = JSON.parse(xhr.responseText); } catch(e) { return; }
+        if (!res.ok) { alert('Git init failed: ' + res.error); return; }
+        loadGitStatus();
+        if (res.output) showGitOutput(res.output);
+    };
+    xhr.send('id=' + DOC_ID + '&remote_url=' + encodeURIComponent(url) + '&branch=' + encodeURIComponent(branch));
+}
+
+function gitPull() {
+    var btn = document.querySelector('#gitHasRepo .sidebar-section button[title="Pull"]');
+    if (btn) { btn.disabled = true; }
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/git_pull.php', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onload = function() {
+        if (btn) btn.disabled = false;
+        var res; try { res = JSON.parse(xhr.responseText); } catch(e) { return; }
+        showGitOutput(res.output || res.error || '');
+        if (res.ok) loadGitStatus();
+    };
+    xhr.send('id=' + DOC_ID);
+}
+
+function gitCommitPush() {
+    var msg = document.getElementById('gitCommitMsg').value.trim();
+    if (!msg) { document.getElementById('gitCommitMsg').focus(); return; }
+
+    var checks = document.querySelectorAll('#gitChangesList .git-file-check:checked');
+    var files  = [];
+    checks.forEach(function(cb) {
+        var pathEl = cb.closest('.git-change-row') && cb.closest('.git-change-row').querySelector('.git-change-path');
+        if (pathEl) files.push(pathEl.textContent.trim());
+    });
+
+    var btn = document.getElementById('gitCommitBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ri-loader-4-line"></i> Working…';
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/git_commit_push.php', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onload = function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ri-git-commit-line"></i> <span id="gitCommitBtnLabel">' + (gitHasRemote ? 'Commit &amp; Push' : 'Commit') + '</span>';
+        var res; try { res = JSON.parse(xhr.responseText); } catch(e) { return; }
+        showGitOutput(res.output || res.error || '');
+        if (res.ok) {
+            document.getElementById('gitCommitMsg').value = '';
+            loadGitStatus();
+        }
+    };
+    xhr.send('id=' + DOC_ID + '&message=' + encodeURIComponent(msg) + '&files=' + encodeURIComponent(JSON.stringify(files)));
+}
+
+function gitSwitchBranch(branch) {
+    var currentOpt = document.querySelector('#gitBranchSelect option[selected]');
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/git_switch_branch.php', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onload = function() {
+        var res; try { res = JSON.parse(xhr.responseText); } catch(e) { return; }
+        if (!res.ok) { alert('Could not switch branch: ' + res.error); loadGitStatus(); return; }
+        loadGitStatus();
+    };
+    xhr.send('id=' + DOC_ID + '&branch=' + encodeURIComponent(branch));
+}
+
+// ── Git gutter (diff markers in code editor) ──────────────────────────────────
+var gitGutterActive = false; // true when a git repo is detected
+
+function loadGitGutter() {
+    var filename = activeFile.isAsset ? activeFile.filename
+                 : (activeFile.id === null ? 'main.typ' : activeFile.id);
+    clearGitGutter();
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/git_diff_file.php', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onload = function() {
+        var res; try { res = JSON.parse(xhr.responseText); } catch(e) { return; }
+        if (!res.ok || !res.changes) return;
+        applyGitGutter(res.changes);
+    };
+    xhr.send('id=' + DOC_ID + '&filename=' + encodeURIComponent(filename));
+}
+
+function clearGitGutter() {
+    editor.clearGutter('CodeMirror-git-gutter');
+}
+
+function applyGitGutter(changes) {
+    clearGitGutter();
+    var deletedLines = {};
+    changes.forEach(function(c) {
+        var lineIdx = c.line - 1; // CodeMirror is 0-indexed
+        if (c.type === 'deleted') {
+            // Deletions are shown as a triangle on the line *before* the deletion
+            var targetIdx = Math.max(0, lineIdx - 1);
+            deletedLines[targetIdx] = true;
+            return;
+        }
+        var marker = document.createElement('div');
+        marker.className = 'cm-git-marker cm-git-' + c.type;
+        editor.setGutterMarker(lineIdx, 'CodeMirror-git-gutter', marker);
+    });
+    // Overlay deletion triangles (bottom of a line)
+    Object.keys(deletedLines).forEach(function(idx) {
+        var existing = editor.lineInfo(+idx);
+        var existingMarker = existing && existing.gutterMarkers && existing.gutterMarkers['CodeMirror-git-gutter'];
+        if (existingMarker) {
+            // Already has a marker — add deletion indicator to it
+            existingMarker.classList.add('cm-git-has-deletion');
+        } else {
+            var marker = document.createElement('div');
+            marker.className = 'cm-git-marker cm-git-deleted';
+            editor.setGutterMarker(+idx, 'CodeMirror-git-gutter', marker);
+        }
+    });
+}
+
+function gitSync() {
+    var btn = document.getElementById('gitSyncBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ri-loader-4-line"></i> Syncing…';
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/git_sync.php', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onload = function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ri-refresh-line"></i> Sync with Remote';
+        var res; try { res = JSON.parse(xhr.responseText); } catch(e) { return; }
+        if (res.ok) {
+            showGitOutput(res.output || '');
+            loadGitStatus();
+            if (gitGutterActive) loadGitGutter();
+        } else {
+            showGitConflictOptions(res.output || res.error || '');
+        }
+    };
+    xhr.onerror = function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ri-refresh-line"></i> Sync with Remote';
+    };
+    xhr.send('id=' + DOC_ID);
+}
+
+function showGitConflictOptions(detail) {
+    var wrap = document.getElementById('gitOutputWrap');
+    var pre  = document.getElementById('gitOutput');
+    // Replace output box with conflict UI
+    wrap.style.display = 'block';
+    wrap.innerHTML =
+        '<div class="sidebar-label" style="margin-bottom:8px;color:#ef5350">' +
+            '<i class="ri-error-warning-line"></i> Sync conflict' +
+        '</div>' +
+        '<p style="font-size:12px;color:var(--grayText);line-height:1.5;margin-bottom:10px">' +
+            'The remote and your local edits changed the same content. Choose how to proceed:' +
+        '</p>' +
+        '<div style="display:flex;flex-direction:column;gap:8px">' +
+            '<button class="git-action-btn" style="background:var(--coninfo);color:var(--text);border:1px solid var(--border)" ' +
+                    'onclick="gitSyncRecover(false)">' +
+                '<i class="ri-arrow-go-back-line"></i> Keep my changes (undo sync)' +
+            '</button>' +
+            '<button class="git-action-btn" style="background:#ef5350" onclick="gitSyncRecover(true)">' +
+                '<i class="ri-download-cloud-line"></i> Take remote version (discard my changes)' +
+            '</button>' +
+        '</div>' +
+        (detail ? '<pre class="git-output-box" style="margin-top:10px;max-height:80px">' + escapeHtml(detail) + '</pre>' : '');
+}
+
+function gitSyncRecover(force) {
+    var wrap = document.getElementById('gitOutputWrap');
+    wrap.innerHTML = '<div style="padding:4px 0;font-size:12px;color:var(--grayText)">Working…</div>';
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/git_sync_abort.php', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onload = function() {
+        var res; try { res = JSON.parse(xhr.responseText); } catch(e) { return; }
+        // Restore the output wrap to its normal state
+        wrap.innerHTML =
+            '<div class="sidebar-label" style="margin-bottom:6px">Output</div>' +
+            '<pre id="gitOutput" class="git-output-box"></pre>';
+        wrap.style.display = res.output ? 'block' : 'none';
+        if (res.output) document.getElementById('gitOutput').textContent = res.output;
+        loadGitStatus();
+        if (gitGutterActive) loadGitGutter();
+    };
+    xhr.send('id=' + DOC_ID + '&force=' + (force ? '1' : '0'));
+}
+
+function gitRevertFile(path, status) {
+    var action = status === '?' ? 'Delete untracked file' : 'Revert changes to';
+    if (!confirm(action + ' "' + path + '"?\nThis cannot be undone.')) return;
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/git_revert_file.php', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onload = function() {
+        var res; try { res = JSON.parse(xhr.responseText); } catch(e) { return; }
+        if (!res.ok) { alert('Revert failed: ' + res.error); return; }
+        loadGitStatus();
+        if (gitGutterActive) loadGitGutter();
+        // Refresh editor if the reverted file is currently open
+        var isMainTyp  = (path === 'main.typ' || path === entryFile) && activeFile.id === null && !activeFile.isAsset;
+        var isExtraTyp = activeFile.id !== null && activeFile.id === path;
+        var isAsset    = activeFile.isAsset && activeFile.filename === path;
+        if (isMainTyp || isExtraTyp || isAsset) {
+            if (status === '?') {
+                // File was deleted — clear editor
+                if (isMainTyp) { mainContent = ''; editor.setValue(''); }
+                else if (isExtraTyp) { delete fileCache[path]; editor.setValue(''); }
+                else { delete assetCache[path]; editor.setValue(''); }
+            } else if (isMainTyp) {
+                // Reload main.typ from server
+                var xr = new XMLHttpRequest();
+                xr.open('POST', '/api/file_get.php', true);
+                xr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+                xr.onload = function() {
+                    var r; try { r = JSON.parse(xr.responseText); } catch(e) { return; }
+                    if (r.ok) {
+                        mainContent = r.content;
+                        if (activeFile.id === null && !activeFile.isAsset) editor.setValue(r.content);
+                    }
+                };
+                xr.send('filename=main.typ&document_id=' + DOC_ID);
+            } else if (isExtraTyp) {
+                delete fileCache[path];
+                var xr = new XMLHttpRequest();
+                xr.open('POST', '/api/file_get.php', true);
+                xr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+                xr.onload = function() {
+                    var r; try { r = JSON.parse(xr.responseText); } catch(e) { return; }
+                    if (r.ok) {
+                        fileCache[path] = r.content;
+                        if (activeFile.id === path) editor.setValue(r.content);
+                    }
+                };
+                xr.send('filename=' + encodeURIComponent(path) + '&document_id=' + DOC_ID);
+            } else if (isAsset) {
+                delete assetCache[path];
+                fetch(imageServeUrl(path))
+                    .then(function(r) { return r.text(); })
+                    .then(function(text) {
+                        assetCache[path] = text;
+                        if (activeFile.isAsset && activeFile.filename === path) editor.setValue(text);
+                    });
+            }
+        }
+    };
+    xhr.send('id=' + DOC_ID + '&path=' + encodeURIComponent(path));
+}
+
+function showGitOutput(text) {
+    if (!text) return;
+    var wrap = document.getElementById('gitOutputWrap');
+    var pre  = document.getElementById('gitOutput');
+    pre.textContent = text;
+    wrap.style.display = 'block';
+}
+
+function escapeHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 </script>
 </body>
