@@ -7,7 +7,7 @@
     font-display: swap;
 }
 :root {
-    --colorTheme: #3838BA;
+    --colorTheme: #6366F1;
     --colorThemeLight: #4CAF50;
 }
 .dark {
@@ -417,12 +417,13 @@ button:focus { outline: 0; }
     gap: 7px;
     cursor: pointer;
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 400;
     color: var(--grayText);
     user-select: none;
     padding: 0 4px;
 }
 .live-switch input { display: none; }
+.live-switch-label { margin-left: 2px; }
 .live-switch-track {
     width: 34px;
     height: 19px;

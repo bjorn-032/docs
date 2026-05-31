@@ -38,6 +38,9 @@ $cmTheme = $isDark ? "dracula" : "default";
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/codemirror.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/addon/comment/comment.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/addon/hint/show-hint.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/addon/search/searchcursor.min.js"></script>
+<!-- PDF.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
 html, body { height: 100%; overflow: hidden; }
 /* Autocomplete hint widget */
@@ -82,12 +85,40 @@ html, body { height: 100%; overflow: hidden; }
     background: var(--sidebar);
 }
 .svg-page {
+    position: relative;
     width: 794px;
     display: block;
     flex-shrink: 0;
     background: #fff;
     border-radius: 2px;
     box-shadow: 0 2px 12px rgba(0,0,0,.35);
+    contain: layout;
+}
+.svg-page canvas { display: block; }
+.textLayer {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    z-index: 2;
+    line-height: 1;
+    text-size-adjust: none;
+}
+.textLayer span,
+.textLayer br {
+    color: transparent;
+    position: absolute;
+    white-space: pre;
+    cursor: text;
+    transform-origin: 0% 0%;
+}
+.textLayer span::selection { background: rgba(0,100,255,.25); }
+.textLayer .endOfContent {
+    display: block;
+    position: absolute;
+    inset: 100% 0 0;
+    z-index: -1;
+    cursor: default;
+    user-select: none;
 }
 .preview-ctrl-btn {
     background: none;
@@ -197,7 +228,7 @@ html, body { height: 100%; overflow: hidden; }
     <!-- Activity bar -->
     <div class="activity-bar">
         <button class="activity-btn active" id="actFiles" onclick="switchPanel('files')" title="Files">
-            <i class="ri-folder-open-line"></i>
+            <i class="ri-folder-open-fill"></i>
         </button>
         <button class="activity-btn" id="actStats" onclick="switchPanel('stats')" title="Document stats">
             <i class="ri-bar-chart-2-line"></i>
@@ -701,6 +732,8 @@ function citationHint(cm) {
     return { list: list, from: from, to: cur };
 }
 
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
 // ── Editor setup ─────────────────────────────────────────────────────────────
 var editor = CodeMirror.fromTextArea(document.getElementById('codeEditor'), {
     mode: "typst",
@@ -733,12 +766,17 @@ var saveTimer           = null;
 var liveTimer           = null;
 var isSaving            = false;
 var isDirty             = false;
+var switchingFile       = false;
 var lastCompiledContent = null;
 var liveMode            = localStorage.getItem('typst_live') !== '0';
 var entryFile           = localStorage.getItem('typst_entry_' + DOC_ID) || 'main.typ';
 var lastCompileBody     = null;
 var previewZoom         = 1.0;
 var pageObserver        = null;
+var pdfDoc              = null;
+var renderGen           = 0;
+var pageTextCache       = {};
+var programmaticScroll  = false;
 
 // Multi-file state
 var activeFile       = { id: null, filename: 'main.typ' }; // null = main doc
@@ -776,9 +814,15 @@ function switchPanel(name) {
         activePanel = name;
         if (name === 'docSettings') renderDocSettings();
     }
-    document.getElementById('actFiles').classList.toggle('active', activePanel === 'files' && panelVisible);
-    document.getElementById('actStats').classList.toggle('active', activePanel === 'stats' && panelVisible);
-    document.getElementById('actDocSettings').classList.toggle('active', activePanel === 'docSettings' && panelVisible);
+    var filesActive = activePanel === 'files' && panelVisible;
+    var statsActive = activePanel === 'stats' && panelVisible;
+    var docSettingsActive = activePanel === 'docSettings' && panelVisible;
+    document.getElementById('actFiles').classList.toggle('active', filesActive);
+    document.getElementById('actFiles').querySelector('i').className = filesActive ? 'ri-folder-open-fill' : 'ri-folder-open-line';
+    document.getElementById('actStats').classList.toggle('active', statsActive);
+    document.getElementById('actStats').querySelector('i').className = statsActive ? 'ri-bar-chart-2-fill' : 'ri-bar-chart-2-line';
+    document.getElementById('actDocSettings').classList.toggle('active', docSettingsActive);
+    document.getElementById('actDocSettings').querySelector('i').className = docSettingsActive ? 'ri-settings-4-fill' : 'ri-settings-4-line';
     editor.refresh();
 }
 
@@ -916,7 +960,7 @@ function makeFolderItem(name, fullPath, depth) {
     div.style.paddingLeft = (12 + depth * 16) + 'px';
     div.innerHTML =
         '<i class="' + (collapsed ? 'ri-arrow-right-s-line' : 'ri-arrow-down-s-line') + ' folder-chevron"></i>' +
-        '<i class="' + (collapsed ? 'ri-folder-line' : 'ri-folder-open-line') + ' folder-icon"></i>' +
+        '<i class="' + (collapsed ? 'ri-folder-fill' : 'ri-folder-open-fill') + ' folder-icon"></i>' +
         '<span class="file-name">' + escHtml(name) + '</span>';
     div.onclick = function(e) { if (!e._wasDrag && !e.target.closest('.file-del') && e.detail < 2) toggleFolder(fullPath); };
     div.addEventListener('dblclick', function(e) {
@@ -994,7 +1038,7 @@ function makeFileItem(id, filename, isActive, depth) {
     div.className = 'file-item' + (isActive ? ' active' : '');
     div.style.paddingLeft = (12 + depth * 16) + 'px';
     div.innerHTML =
-        '<i class="' + (id === null ? 'ri-file-text-line' : 'ri-file-line') + '"></i>' +
+        '<i class="' + (id === null ? (isActive ? 'ri-file-text-fill' : 'ri-file-text-line') : (isActive ? 'ri-file-fill' : 'ri-file-line')) + '"></i>' +
         '<span class="file-name">' + escHtml(displayName) + '</span>';
     div.onclick = function(e) {
         if (e.target.closest('.file-del')) return;
@@ -1152,13 +1196,16 @@ function switchFile(file) {
 
     activeFile = file;
 
+    switchingFile = true;
     if (file.id === null) {
         // Switching to main file — content is already in fileCache or we just read it
         // The main file content is tracked separately: restore from mainContent
         editor.setValue(mainContent);
+        switchingFile = false;
     } else {
         if (fileCache[file.id] !== undefined) {
             editor.setValue(fileCache[file.id]);
+            switchingFile = false;
         } else {
             // Fetch from server
             editor.setValue('');
@@ -1167,11 +1214,12 @@ function switchFile(file) {
             xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
             xhr.onload = function() {
                 var res;
-                try { res = JSON.parse(xhr.responseText); } catch(e) { return; }
+                try { res = JSON.parse(xhr.responseText); } catch(e) { switchingFile = false; return; }
                 if (res.ok) {
                     fileCache[file.id] = res.content;
                     if (activeFile.id === file.id) editor.setValue(res.content);
                 }
+                switchingFile = false;
             };
             xhr.send('id=' + file.id + '&document_id=' + DOC_ID);
         }
@@ -1227,7 +1275,7 @@ function makeImageItem(filename, depth) {
     div.style.paddingLeft = (12 + depth * 16) + 'px';
     var isFont = /\.(ttf|otf|woff2?|eot)$/i.test(filename);
     div.innerHTML =
-        '<i class="' + (isFont ? 'ri-font-size' : 'ri-image-line') + '" style="color:' + (isFont ? '#ce93d8' : '#f48fb1') + '"></i>' +
+        '<i class="' + (isFont ? 'ri-font-size' : 'ri-image-fill') + '" style="color:' + (isFont ? '#ce93d8' : '#f48fb1') + '"></i>' +
         '<span class="file-name">' + escHtml(displayName) + '</span>';
     div.onclick = function(e) {
         if (e.target.closest('.file-del')) return;
@@ -1541,6 +1589,7 @@ function updateSelectionStats() {
     document.getElementById('sidebarSelChars').textContent = chars;
 }
 editor.on('change', function() {
+    if (switchingFile) return;
     if (activeFile.id === null) mainContent = editor.getValue();
     updateStats();
     isDirty = true;
@@ -1710,9 +1759,7 @@ function compileDoc() {
         }
         if (res.ok) {
             document.getElementById('sidebarStatus').textContent = '✓ OK';
-            var np = res.pages.length;
-            document.getElementById('previewLabel').textContent = np + (np === 1 ? ' page' : ' pages') + ' (' + elapsed + ')';
-            showSVG(res.pages);
+            showPDF(res.pdf, elapsed);
             document.getElementById('pdfDownloadBtn').style.display = 'flex';
         } else {
             document.getElementById('sidebarStatus').textContent = '✗ Error';
@@ -1745,45 +1792,62 @@ function compileDoc() {
     var body = 'id=' + DOC_ID + '&content=' + encodeURIComponent(payload_content) + '&entry=' + encodeURIComponent(entryFile);
     if (payload_files.length > 0) body += '&files=' + encodeURIComponent(JSON.stringify(payload_files));
     lastCompileBody = body;
-    xhr.send(body);
+    xhr.send(body + '&format=pdf');
 }
 
 function zoomIn()  { previewZoom = Math.min(3.0, Math.round((previewZoom + 0.25) * 100) / 100); applyZoom(); }
 function zoomOut() { previewZoom = Math.max(0.25, Math.round((previewZoom - 0.25) * 100) / 100); applyZoom(); }
 
 function applyZoom() {
-    var container = document.querySelector('.svg-pages');
-    if (!container) return;
-    var w = Math.round(794 * previewZoom) + 'px';
-    container.querySelectorAll('img.svg-page').forEach(function(img) { img.style.width = w; });
     document.getElementById('zoomLabel').textContent = Math.round(previewZoom * 100) + '%';
+    if (pdfDoc) renderAllPages();
 }
 
 function goToPage(n) {
     var container = document.querySelector('.svg-pages');
     if (!container) return;
-    var imgs = container.querySelectorAll('img.svg-page');
+    var imgs = container.querySelectorAll('div.svg-page');
     if (!imgs.length) return;
     n = Math.max(1, Math.min(n, imgs.length));
     document.getElementById('pageInput').value = n;
+    programmaticScroll = true;
     imgs[n - 1].scrollIntoView({behavior: 'smooth', block: 'start'});
+    setTimeout(function() { programmaticScroll = false; }, 900);
 }
 
 function setupPageObserver() {
     if (pageObserver) pageObserver.disconnect();
     var container = document.querySelector('.svg-pages');
     if (!container) return;
-    var imgs = container.querySelectorAll('img.svg-page');
+    var imgs = container.querySelectorAll('div.svg-page');
     document.getElementById('pageTotal').textContent = '/ ' + imgs.length;
+    var ratios = {};
     pageObserver = new IntersectionObserver(function(entries) {
-        var best = null, bestRatio = -1;
-        entries.forEach(function(e) { if (e.intersectionRatio > bestRatio) { bestRatio = e.intersectionRatio; best = e.target; } });
-        if (best) document.getElementById('pageInput').value = Array.prototype.indexOf.call(best.parentNode.children, best) + 1;
-    }, { root: container, threshold: [0, 0.1, 0.5, 1.0] });
+        entries.forEach(function(e) {
+            var idx = Array.prototype.indexOf.call(e.target.parentNode.children, e.target);
+            ratios[idx] = e.intersectionRatio;
+        });
+        var best = 0, bestVal = -1;
+        Object.keys(ratios).forEach(function(k) {
+            if (ratios[+k] > bestVal) { bestVal = ratios[+k]; best = +k; }
+        });
+        if (bestVal >= 0 && !programmaticScroll) document.getElementById('pageInput').value = best + 1;
+    }, { root: container, threshold: [0, 0.1, 0.25, 0.5, 0.75, 1.0] });
     imgs.forEach(function(img) { pageObserver.observe(img); });
 }
 
-function showSVG(pages) {
+function showPDF(base64, elapsed) {
+    var binary = atob(base64);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    pageTextCache = {};
+    pdfjsLib.getDocument({ data: bytes }).promise.then(function(pdf) {
+        pdfDoc = pdf;
+        renderAllPages(elapsed);
+    });
+}
+
+function renderAllPages(elapsed) {
     var wrap = document.getElementById('previewWrap');
     var placeholder = document.getElementById('previewPlaceholder');
     if (placeholder) placeholder.style.display = 'none';
@@ -1798,33 +1862,192 @@ function showSVG(pages) {
     }
     container.style.display = '';
 
+    var numPages = pdfDoc.numPages;
     var w = Math.round(794 * previewZoom) + 'px';
-    var imgs = container.querySelectorAll('img.svg-page');
-    pages.forEach(function(svgStr, i) {
-        var blob = new Blob([svgStr], {type: 'image/svg+xml'});
-        var url = URL.createObjectURL(blob);
-        if (imgs[i]) {
-            if (imgs[i]._blobUrl) URL.revokeObjectURL(imgs[i]._blobUrl);
-            imgs[i]._blobUrl = url;
-            imgs[i].src = url;
-        } else {
-            var img = document.createElement('img');
-            img.className = 'svg-page';
-            img.style.width = w;
-            img._blobUrl = url;
-            img.src = url;
-            container.appendChild(img);
-        }
-    });
-    for (var i = pages.length; i < imgs.length; i++) {
-        if (imgs[i]._blobUrl) URL.revokeObjectURL(imgs[i]._blobUrl);
-        imgs[i].remove();
+    var divs = Array.from(container.querySelectorAll('div.svg-page'));
+
+    // Add missing page containers
+    while (divs.length < numPages) {
+        var pageDiv = document.createElement('div');
+        pageDiv.className = 'svg-page';
+        pageDiv.style.width = w;
+        var canvas = document.createElement('canvas');
+        pageDiv.appendChild(canvas);
+        var tl = document.createElement('div');
+        tl.className = 'textLayer';
+        pageDiv.appendChild(tl);
+        container.appendChild(pageDiv);
+        divs.push(pageDiv);
+    }
+    // Remove extra page containers
+    while (divs.length > numPages) { divs.pop().remove(); }
+
+    divs.forEach(function(d) { d.style.width = w; });
+
+    var np = numPages;
+    if (elapsed !== undefined) {
+        document.getElementById('previewLabel').textContent = np + (np === 1 ? ' page' : ' pages') + ' (' + elapsed + ')';
     }
 
-    var controls = document.getElementById('previewControls');
-    controls.style.display = 'flex';
+    var gen = ++renderGen;
+    divs.forEach(function(pageDiv, idx) { renderPage(idx + 1, pageDiv, gen); });
+
+    document.getElementById('previewControls').style.display = 'flex';
+    document.getElementById('pageTotal').textContent = '/ ' + np;
     setupPageObserver();
 }
+
+function renderPage(pageNum, pageDiv, gen) {
+    pdfDoc.getPage(pageNum).then(function(page) {
+        if (renderGen !== gen) return;
+        var dpr = window.devicePixelRatio || 1;
+        var baseVp = page.getViewport({ scale: 1 });
+        var cssScale = (794 * previewZoom) / baseVp.width;
+        var cssVp = page.getViewport({ scale: cssScale });
+        var hiVp = page.getViewport({ scale: cssScale * dpr });
+
+        var canvas = pageDiv.querySelector('canvas');
+        canvas.width = hiVp.width;
+        canvas.height = hiVp.height;
+        canvas.style.width = Math.round(cssVp.width) + 'px';
+        canvas.style.height = Math.round(cssVp.height) + 'px';
+        pageDiv.style.height = Math.round(cssVp.height) + 'px';
+
+        page.render({ canvasContext: canvas.getContext('2d'), viewport: hiVp }).promise.then(function() {
+            if (renderGen !== gen) return;
+            var textLayerDiv = pageDiv.querySelector('.textLayer');
+            textLayerDiv.innerHTML = '';
+            textLayerDiv.style.width = Math.round(cssVp.width) + 'px';
+            textLayerDiv.style.height = Math.round(cssVp.height) + 'px';
+            textLayerDiv.style.setProperty('--scale-factor', cssScale);
+            page.getTextContent().then(function(textContent) {
+                if (renderGen !== gen) return;
+                pageTextCache[pageNum] = textContent;
+                pdfjsLib.renderTextLayer({
+                    textContentSource: textContent,
+                    container: textLayerDiv,
+                    viewport: cssVp,
+                });
+            });
+        });
+    });
+}
+
+// Move the editor cursor to pos, centre the line in the viewport, and keep focus.
+function navigateTo(pos) {
+    editor.setCursor(pos);
+    var coords     = editor.charCoords(pos, 'local');
+    var halfHeight = editor.getScrollInfo().clientHeight / 2;
+    editor.scrollTo(null, coords.top - halfHeight);
+    // Defer focus so it runs after the browser finishes processing the click's
+    // own focus side-effects (which would otherwise steal it back immediately).
+    setTimeout(function() { editor.focus(); }, 0);
+}
+
+// Fetch (and cache) the text content for one PDF page.
+function getPageText(pageNum) {
+    if (pageTextCache[pageNum]) return Promise.resolve(pageTextCache[pageNum]);
+    return pdfDoc.getPage(pageNum).then(function(pg) {
+        return pg.getTextContent().then(function(tc) {
+            pageTextCache[pageNum] = tc;
+            return tc;
+        });
+    });
+}
+
+document.getElementById('previewWrap').addEventListener('dblclick', function(e) {
+    window.getSelection().removeAllRanges(); // clear the word selection made by double-click
+    var pageEl = e.target.closest('div.svg-page');
+    if (!pageEl || !pdfDoc) return;
+    editor.focus(); // claim focus synchronously before async work begins
+
+    var pages   = Array.from(document.querySelectorAll('div.svg-page'));
+    var pageIdx = pages.indexOf(pageEl);
+    var pageNum = pageIdx + 1;
+    var rect    = pageEl.getBoundingClientRect();
+    var localX  = e.clientX - rect.left;
+    var localY  = e.clientY - rect.top;
+
+    // Fetch text content for every page in parallel (cached after first compile).
+    var pagePromises = [];
+    for (var p = 1; p <= pdfDoc.numPages; p++) pagePromises.push(getPageText(p));
+
+    Promise.all([
+        pdfDoc.getPage(pageNum),
+        Promise.all(pagePromises)
+    ]).then(function(results) {
+        var page  = results[0];
+        var allTC = results[1];
+
+        // Convert click to PDF coordinate space.
+        var cssScale = (794 * previewZoom) / page.getViewport({ scale: 1 }).width;
+        var pdfPt    = page.getViewport({ scale: cssScale }).convertToPdfPoint(localX, localY);
+
+        // Count non-empty text items per page in reading order.
+        // PDF.js returns items in document reading order (left column before right),
+        // so the item index across all pages maps well to source position.
+        function textItems(tc) {
+            return tc.items.filter(function(i) { return i.str && i.str.trim(); });
+        }
+
+        var pageCounts = allTC.map(function(tc) { return textItems(tc).length; });
+        var totalItems = pageCounts.reduce(function(s, n) { return s + n; }, 0);
+        if (!totalItems) return;
+
+        // Find the item on the clicked page closest to the click position.
+        // y is weighted 4× so we stay on the right line in multi-column layouts.
+        var clickedItems = textItems(allTC[pageIdx]);
+        var best = null, bestScore = Infinity;
+        clickedItems.forEach(function(item) {
+            var ih = Math.abs(item.transform[3]) || 10;
+            var iw = Math.max(item.width || 0, 1);
+            var dy = (pdfPt[1] - (item.transform[5] + ih * 0.5)) / ih;
+            var dx = (pdfPt[0] - (item.transform[4] + iw * 0.5)) / iw;
+            var score = dy * dy * 4 + dx * dx;
+            if (score < bestScore) { bestScore = score; best = item; }
+        });
+
+        // Global index of the clicked item across all pages.
+        var prevItems = pageCounts.slice(0, pageIdx).reduce(function(s, n) { return s + n; }, 0);
+        var localIdx  = best ? clickedItems.indexOf(best) : Math.round(clickedItems.length * localY / rect.height);
+        var globalIdx = prevItems + localIdx;
+
+        // ── Step 1: preamble-aware rough line estimate ───────────────────────
+        // Scan the source to find where actual content begins (skip #import,
+        // #set, #show, #let, #include, blank lines and // comments at the top).
+        // This prevents fraction=0 from landing in the import block.
+        var srcLines     = editor.getValue().split('\n');
+        var contentStart = 0;
+        for (var li = 0; li < srcLines.length; li++) {
+            var t = srcLines[li].trim();
+            if (t && !/^(#import|#set|#show|#let|#include|\/\/)/.test(t)) {
+                contentStart = li;
+                break;
+            }
+        }
+        var fraction    = totalItems > 1 ? globalIdx / (totalItems - 1) : 0;
+        var contentLines = srcLines.length - 1 - contentStart;
+        var roughLine    = contentStart + Math.round(fraction * contentLines);
+
+        // ── Step 2: windowed text search around the rough estimate ────────────
+        // Search for the clicked item's text starting 60 lines before roughLine
+        // so we find the correct occurrence rather than the first one in the file.
+        var WINDOW  = 60;
+        var needle  = best ? best.str.trim() : '';
+        var landed  = false;
+
+        if (needle.length >= 3) {
+            var searchFrom = Math.max(0, roughLine - WINDOW);
+            var cur = editor.getSearchCursor(needle, { line: searchFrom, ch: 0 });
+            if (cur.findNext() && Math.abs(cur.from().line - roughLine) <= WINDOW * 2) {
+                navigateTo(cur.from());
+                landed = true;
+            }
+        }
+
+        if (!landed) navigateTo({ line: roughLine, ch: 0 });
+    });
+});
 
 function downloadPDF() {
     if (!lastCompileBody) return;
