@@ -47,7 +47,7 @@ if (is_dir($imgDir)) {
         $dest    = "$tmpDir/$rel";
         $destDir = dirname($dest);
         if (!is_dir($destDir)) mkdir($destDir, 0700, true);
-        symlink($file->getPathname(), $dest);
+        if (!file_exists($dest) && !is_link($dest)) symlink($file->getPathname(), $dest);
     }
 }
 

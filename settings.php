@@ -10,8 +10,8 @@ $themeClass = $isDark ? "dark" : "light";
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Settings — Fireants Documents</title>
-<link rel="icon" href="/logo_small_white.png" type="image/png">
+<title>Settings - Docs</title>
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
@@ -59,9 +59,9 @@ $themeClass = $isDark ? "dark" : "light";
 
     <!-- Git: SSH Key -->
     <div class="settings-card">
-        <div class="settings-section-title">Git — SSH Key</div>
+        <div class="settings-section-title">Git - SSH Key</div>
         <p style="font-size:13px;color:var(--grayText);line-height:1.6;margin-bottom:16px">
-            Add this public key to your GitHub or GitLab account to allow pushing from Fireants Documents.
+            Add this public key to your GitHub or GitLab account to allow pushing from Docs.
         </p>
         <textarea id="sshPubKey" class="git-pub-key-box" rows="4" readonly spellcheck="false">Loading…</textarea>
         <div class="git-btn-row">
@@ -72,7 +72,7 @@ $themeClass = $isDark ? "dark" : "light";
 
     <!-- Git: Author -->
     <div class="settings-card">
-        <div class="settings-section-title">Git — Author</div>
+        <div class="settings-section-title">Git - Author</div>
         <p style="font-size:13px;color:var(--grayText);line-height:1.6;margin-bottom:16px">
             Name and email used in commit messages.
         </p>

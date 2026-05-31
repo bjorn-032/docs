@@ -69,10 +69,9 @@ button:focus { outline: 0; }
     z-index: 10;
 }
 .topbar-logo {
-    height: 32px;
+    height: 24px;
     width: auto;
 }
-.light .topbar-logo { filter: invert(1); }
 .topbar-title {
     font-size: 18px;
     font-weight: 600;

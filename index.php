@@ -21,8 +21,8 @@ $themeClass = $isDark ? "dark" : "light";
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Fireants Documents — Library</title>
-<link rel="icon" href="/logo_small_white.png" type="image/png">
+<title>Docs - Library</title>
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
@@ -33,8 +33,8 @@ $themeClass = $isDark ? "dark" : "light";
 <body class="<?= $themeClass ?>">
 
 <div class="topbar">
-    <img src="/logo_small_white.png" class="topbar-logo" alt="logo">
-    <span class="topbar-title">Fireants Documents</span>
+    <img src="/logo.svg" class="topbar-logo" alt="logo">
+    <span class="topbar-title">Docs</span>
     <button class="topbar-btn secondary" onclick="openImportModal()">
         <i class="ri-upload-2-line" style="vertical-align:middle;margin-right:4px"></i>Import
     </button>
@@ -78,13 +78,13 @@ $themeClass = $isDark ? "dark" : "light";
     <?php else: ?>
     <div class="doc-grid">
         <?php foreach ($docs as $doc): ?>
-        <div class="doc-card" onclick="openDoc(<?= (int)$doc['id'] ?>)" data-title="<?= htmlspecialchars(strtolower($doc['title'])) ?>" data-updated="<?= strtotime($doc['updated_at']) ?>" data-created="<?= strtotime($doc['created_at']) ?>">
+        <div class="doc-card" onclick="openDoc(<?= (int)$doc['id'] ?>)" data-title="<?= htmlspecialchars(strtolower($doc['title'])) ?>" data-updated="<?= strtotime($doc['updated_at'] ?? '') ?>" data-created="<?= strtotime($doc['created_at'] ?? '') ?>">
             <div class="doc-card-preview">
                 <i class="ri-file-text-line" style="font-size:56px"></i>
             </div>
             <div class="doc-card-body">
                 <div class="doc-card-title"><?= htmlspecialchars($doc['title']) ?></div>
-                <div class="doc-card-date"><?= date('M j, Y', strtotime($doc['updated_at'])) ?></div>
+                <div class="doc-card-date"><?= $doc['updated_at'] ? date('M j, Y', strtotime($doc['updated_at'])) : '-' ?></div>
             </div>
             <button class="doc-card-more" data-id="<?= (int)$doc['id'] ?>" data-title="<?= htmlspecialchars($doc['title'], ENT_QUOTES) ?>" onclick="openCardMenu(event)" title="More">
                 <i class="ri-more-line" style="font-size:16px"></i>

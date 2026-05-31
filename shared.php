@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/config.php';
 $db = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 if ($db->connect_error) { http_response_code(500); die("DB error"); }
 

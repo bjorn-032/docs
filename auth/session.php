@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../config.php';
 // Shared session helper for the typst editor.
 // Call requireAuth() from pages, requireAuthApi() from JSON API endpoints.
 

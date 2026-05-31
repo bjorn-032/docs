@@ -1,0 +1,14 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8023:80"
+    env_file: .env
+    volumes:
+      - ./app_data:/var/www/html/data
+      - ./app_ssh_keys:/var/www/html/ssh_keys
+      - db_data:/var/lib/mysql
+
+volumes:
+  db_data:

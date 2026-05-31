@@ -60,8 +60,8 @@ $cmTheme = $isDark ? "dracula" : "default";
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title><?= htmlspecialchars($doc['title']) ?> — Fireants Documents</title>
-<link rel="icon" href="/logo_small_white.png" type="image/png">
+<title><?= htmlspecialchars($doc['title']) ?> - Docs</title>
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
@@ -254,7 +254,7 @@ html, body { height: 100%; overflow: hidden; }
     <?php endif; ?>
     <span class="save-indicator" id="saveIndicator"></span>
     <?php if ($shareAccess !== null): ?>
-    <span class="shared-badge"><?= $shareAccess === 'edit' ? 'Shared — Edit' : 'Shared — View only' ?></span>
+    <span class="shared-badge"><?= $shareAccess === 'edit' ? 'Shared - Edit' : 'Shared - View only' ?></span>
     <?php endif; ?>
     <button class="compile-btn" id="compileBtn" onclick="compileDoc()">
         <i class="ri-play-fill"></i>Compile
@@ -411,7 +411,7 @@ html, body { height: 100%; overflow: hidden; }
 
                 <!-- Commit -->
                 <div class="sidebar-section" style="flex-shrink:0">
-                    <!-- Behind warning — shown instead of commit form when remote has new commits -->
+                    <!-- Behind warning - shown instead of commit form when remote has new commits -->
                     <div id="gitBehindWarn" style="display:none;flex-direction:column;gap:8px">
                         <div class="git-behind-msg">
                             <i class="ri-error-warning-line"></i>
@@ -454,7 +454,7 @@ html, body { height: 100%; overflow: hidden; }
                     <span>ID</span><span id="sidebarId"><?= $doc['id'] ?></span>
                 </div>
                 <div class="sidebar-info-row">
-                    <span>Last saved</span><span id="sidebarSaved">—</span>
+                    <span>Last saved</span><span id="sidebarSaved">-</span>
                 </div>
                 <div class="sidebar-info-row">
                     <span>Characters</span><span id="sidebarChars">0</span>
@@ -478,10 +478,10 @@ html, body { height: 100%; overflow: hidden; }
             <div class="sidebar-section">
                 <div class="sidebar-label">Compile</div>
                 <div class="sidebar-info-row">
-                    <span>Status</span><span id="sidebarStatus">—</span>
+                    <span>Status</span><span id="sidebarStatus">-</span>
                 </div>
                 <div class="sidebar-info-row">
-                    <span>Time</span><span id="sidebarTime">—</span>
+                    <span>Time</span><span id="sidebarTime">-</span>
                 </div>
             </div>
         </div>
@@ -515,7 +515,7 @@ html, body { height: 100%; overflow: hidden; }
     <div class="preview-pane" id="previewPane">
         <div class="preview-toolbar">
             <i class="ri-file-pdf-line" style="font-size:16px"></i>
-            <span id="previewLabel">No output yet — click Compile</span>
+            <span id="previewLabel">No output yet - click Compile</span>
             <div id="previewControls" style="display:none;margin-left:auto;align-items:center;gap:4px">
                 <button class="preview-ctrl-btn" onclick="zoomOut()" title="Zoom out"><i class="ri-subtract-line"></i></button>
                 <span id="zoomLabel" style="font-size:11px;color:var(--grayText);min-width:34px;text-align:center">100%</span>
@@ -670,7 +670,7 @@ CodeMirror.defineMode("typst", function() {
         if (stream.match(codeKeywords)) return "typst-keyword";
         // Label <label>
         if (stream.match(/^<[a-zA-Z_][a-zA-Z0-9_\-]*>/)) return "typst-label";
-        // Identifier — check if followed by ( (function call)
+        // Identifier - check if followed by ( (function call)
         var word = stream.match(/^[a-zA-Z_][a-zA-Z0-9_\-]*/);
         if (word) {
             if (stream.peek() === '(') return "typst-fn";
@@ -686,12 +686,12 @@ CodeMirror.defineMode("typst", function() {
         if (ch === '}') {
             stream.next();
             if (state.codeDepth > 0) { state.codeDepth--; return "bracket"; }
-            // No open braces: end of #{ ... } — back to markup
+            // No open braces: end of #{ ... } - back to markup
             state.mode = MARKUP;
             return "bracket";
         }
         if (ch === '[') {
-            // content block — back to markup until matching ]
+            // content block - back to markup until matching ]
             stream.next();
             state.bracketDepth++;
             state.mode = MARKUP;
@@ -1216,7 +1216,7 @@ function renderFileList() {
         projectImages.map(function(name) { return { id: null, filename: name, isImage: true, isActive: !!activeFile.isAsset && activeFile.filename === name }; })
     );
     renderFileTree(buildFileTree(allItems), '', 0, list);
-    // Root drop zone — drop here to move file/folder out of any folder
+    // Root drop zone - drop here to move file/folder out of any folder
     list.ondragover = function(e) {
         if ((!draggedFile || !draggedFile.id) && !draggedFolder && !draggedImage) return;
         e.preventDefault();
@@ -1482,7 +1482,7 @@ function switchFile(file) {
         if (assetCache[activeFile.filename] !== undefined) {
             assetCache[activeFile.filename] = editor.getValue();
         } else {
-            assetLoaded = false; // still loading — don't overwrite with empty editor
+            assetLoaded = false; // still loading - don't overwrite with empty editor
         }
     } else if (activeFile.id === null) {
         // main file: nothing to cache (tracked in mainContent elsewhere)
@@ -1901,7 +1901,7 @@ function batchSaveTextFile(filename, content, onComplete) {
 
 // ── Sidebar stats ─────────────────────────────────────────────────────────────
 function stripTypstMarkup(src) {
-    // Raw blocks (```...```) and inline code (`...`) — not prose
+    // Raw blocks (```...```) and inline code (`...`) - not prose
     src = src.replace(/```[\s\S]*?```/g, ' ');
     src = src.replace(/`[^`\n]+`/g, ' ');
     // Block and line comments
@@ -1995,7 +1995,7 @@ setTimeout(compileDoc, 300);
         var pos = editor.coordsChar({ left: e.clientX, top: e.clientY });
         draggedImage = null;
         // setTimeout lets CodeMirror's own drop handler (on the child scroller) finish
-        // first — it inserts nothing because we set text/plain to '' in dragstart.
+        // first - it inserts nothing because we set text/plain to '' in dragstart.
         setTimeout(function() {
             editor.focus();
             editor.setCursor(pos);
@@ -3111,7 +3111,7 @@ function applyGitGutter(changes) {
         var existing = editor.lineInfo(+idx);
         var existingMarker = existing && existing.gutterMarkers && existing.gutterMarkers['CodeMirror-git-gutter'];
         if (existingMarker) {
-            // Already has a marker — add deletion indicator to it
+            // Already has a marker - add deletion indicator to it
             existingMarker.classList.add('cm-git-has-deletion');
         } else {
             var marker = document.createElement('div');
@@ -3210,7 +3210,7 @@ function gitRevertFile(path, status) {
         var isAsset    = activeFile.isAsset && activeFile.filename === path;
         if (isMainTyp || isExtraTyp || isAsset) {
             if (status === '?') {
-                // File was deleted — clear editor
+                // File was deleted - clear editor
                 if (isMainTyp) { mainContent = ''; editor.setValue(''); }
                 else if (isExtraTyp) { delete fileCache[path]; editor.setValue(''); }
                 else { delete assetCache[path]; editor.setValue(''); }
