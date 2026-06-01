@@ -610,11 +610,12 @@ CodeMirror.defineMode("typst", function() {
             stream.next();
             state.mode = CODE;
             state.codeDepth = 0;
+            state.parenDepth = 0;
             state.bracketDepth = 0;
             return "typst-hash";
         }
         // Label <label-name>
-        if (stream.match(/^<[a-zA-Z_][a-zA-Z0-9_\-]*>/)) return "typst-label";
+        if (stream.match(/^<[a-zA-Z_][a-zA-Z0-9_\-:.]*>/)) return "typst-label";
         // Reference @ref
         if (stream.match(/^@[a-zA-Z_][a-zA-Z0-9_\-:]*/)) return "typst-ref";
         // Bold *...*  (simple single-line)
@@ -669,12 +670,12 @@ CodeMirror.defineMode("typst", function() {
         // Keywords
         if (stream.match(codeKeywords)) return "typst-keyword";
         // Label <label>
-        if (stream.match(/^<[a-zA-Z_][a-zA-Z0-9_\-]*>/)) return "typst-label";
+        if (stream.match(/^<[a-zA-Z_][a-zA-Z0-9_\-:.]*>/)) return "typst-label";
         // Identifier - check if followed by ( (function call)
         var word = stream.match(/^[a-zA-Z_][a-zA-Z0-9_\-]*/);
         if (word) {
             if (stream.peek() === '(') return "typst-fn";
-            return "variable";
+            return null;
         }
         // Bracket tracking to know when code mode ends
         var ch = stream.peek();
@@ -705,12 +706,23 @@ CodeMirror.defineMode("typst", function() {
             state.mode = MARKUP;
             return "bracket";
         }
-        if (ch === '(' || ch === ')') { stream.next(); return "bracket"; }
+        if (ch === '(') {
+            stream.next();
+            state.parenDepth++;
+            return "bracket";
+        }
+        if (ch === ')') {
+            stream.next();
+            if (state.parenDepth > 0) state.parenDepth--;
+            if (state.parenDepth === 0 && state.codeDepth === 0 && !state.inContentBlock) {
+                state.mode = MARKUP;
+            }
+            return "bracket";
+        }
         // Operators
         if (stream.match(/^(==|!=|<=|>=|=>|->|\+|-|\*|\/|=|<|>|:|,|;|\.\.\.?)/)) return "typst-operator";
-        // End of code expression on whitespace/newline when no open braces
-        if (state.codeDepth === 0 && (stream.peek() === ' ' || stream.peek() === '\n' || stream.eol())) {
-            // only exit if we were in a bare # expression (not inside brackets)
+        // End of code expression on whitespace/newline when no open braces or parens
+        if (state.codeDepth === 0 && state.parenDepth === 0 && (stream.peek() === ' ' || stream.peek() === '\n' || stream.eol())) {
             if (!state.inContentBlock) state.mode = MARKUP;
         }
         stream.next();
@@ -775,6 +787,7 @@ CodeMirror.defineMode("typst", function() {
             return {
                 mode: MARKUP,
                 codeDepth: 0,
+                parenDepth: 0,
                 bracketDepth: 0,
                 inContentBlock: false,
                 blockComment: false,
@@ -936,7 +949,8 @@ function typstHint(cm) {
 function prefetchBibFiles() {
     projectImages.forEach(function(name) {
         if (!/\.bib$/i.test(name)) return;
-        if (assetCache[name] !== undefined) return;
+        // Skip if this .bib is currently open in the editor (live content takes precedence)
+        if (activeFile.isAsset && activeFile.filename === name) return;
         fetch(imageServeUrl(name))
             .then(function(r) { return r.text(); })
             .then(function(text) { assetCache[name] = text; })
