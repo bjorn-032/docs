@@ -63,9 +63,15 @@ $themeClass = $isDark ? "dark" : "light";
         <p style="font-size:13px;color:var(--grayText);line-height:1.6;margin-bottom:16px">
             Add this public key to your GitHub or GitLab account to allow pushing from Docs.
         </p>
-        <textarea id="sshPubKey" class="git-pub-key-box" rows="4" readonly spellcheck="false">Loading…</textarea>
+        <div class="git-pub-key-wrap" id="sshKeyWrap">
+            <textarea id="sshPubKey" class="git-pub-key-box git-pub-key-blurred" rows="4" readonly spellcheck="false">Loading…</textarea>
+            <div class="git-pub-key-overlay" id="sshKeyOverlay" onclick="revealPubKey()">
+                <i class="ri-eye-line"></i> Click to reveal
+            </div>
+        </div>
         <div class="git-btn-row">
             <button class="git-secondary-btn" onclick="copyPubKey()"><i class="ri-file-copy-line"></i> Copy</button>
+            <button class="git-secondary-btn" onclick="hidePubKey()"><i class="ri-eye-off-line"></i> Hide</button>
             <button class="git-secondary-btn" onclick="regenKey()"><i class="ri-refresh-line"></i> Regenerate</button>
         </div>
     </div>
@@ -132,6 +138,16 @@ function loadSshKey() {
         else document.getElementById('sshPubKey').value = 'Error: ' + res.error;
     };
     xhr.send('');
+}
+
+function revealPubKey() {
+    document.getElementById('sshPubKey').classList.remove('git-pub-key-blurred');
+    document.getElementById('sshKeyOverlay').style.display = 'none';
+}
+
+function hidePubKey() {
+    document.getElementById('sshPubKey').classList.add('git-pub-key-blurred');
+    document.getElementById('sshKeyOverlay').style.display = '';
 }
 
 function copyPubKey() {

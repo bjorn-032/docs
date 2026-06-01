@@ -934,17 +934,13 @@ function typstHint(cm) {
 }
 
 function prefetchBibFiles() {
-    extraFiles.forEach(function(f) {
-        if (fileCache[f.id] !== undefined) return;
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', '/api/file_get.php', true);
-        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-        xhr.onload = function() {
-            var res;
-            try { res = JSON.parse(xhr.responseText); } catch(e) { return; }
-            if (res.ok) fileCache[f.id] = res.content;
-        };
-        xhr.send('filename=' + encodeURIComponent(f.id) + '&document_id=' + DOC_ID);
+    projectImages.forEach(function(name) {
+        if (!/\.bib$/i.test(name)) return;
+        if (assetCache[name] !== undefined) return;
+        fetch(imageServeUrl(name))
+            .then(function(r) { return r.text(); })
+            .then(function(text) { assetCache[name] = text; })
+            .catch(function() {});
     });
 }
 
@@ -959,13 +955,14 @@ function parseBibKeys(content, keys) {
 
 function getCitationKeys() {
     var keys = [];
-    // Include the currently-open .bib file from the live editor content
-    if (activeFile.id !== null && /\.bib$/i.test(activeFile.filename))
+    // Currently-open .bib file: read live editor content
+    if (activeFile.isAsset && /\.bib$/i.test(activeFile.filename))
         parseBibKeys(editor.getValue(), keys);
-    extraFiles.forEach(function(f) {
-        if (!/\.bib$/i.test(f.filename)) return;
-        if (f.id === activeFile.id) return;
-        parseBibKeys(fileCache[f.id] || '', keys);
+    // Other .bib files in the project (stored as assets)
+    projectImages.forEach(function(name) {
+        if (!/\.bib$/i.test(name)) return;
+        if (activeFile.isAsset && activeFile.filename === name) return;
+        parseBibKeys(assetCache[name] || '', keys);
     });
     return keys;
 }
@@ -1159,7 +1156,6 @@ function loadFileList() {
             });
         }
         renderFileList();
-        prefetchBibFiles();
     };
     xhr.onerror = function() { renderFileList(); };
     xhr.send('document_id=' + DOC_ID);
@@ -1708,6 +1704,7 @@ function loadImageList() {
             });
         }
         renderFileList();
+        prefetchBibFiles();
     };
     xhr.send('document_id=' + DOC_ID);
 }
@@ -1958,7 +1955,7 @@ function updateSelectionStats() {
 }
 editor.on('change', function() {
     if (switchingFile) return;
-    if (activeFile.id === null) mainContent = editor.getValue();
+    if (activeFile.id === null && !activeFile.isAsset) mainContent = editor.getValue();
     updateStats();
     if (SHARE_ACCESS === 'view') return; // view-only: no saves
     isDirty = true;
@@ -2059,7 +2056,7 @@ function saveDoc() {
     isSaving = true;
     setIndicator('Saving…');
     var title   = document.getElementById('docTitle').value || 'Untitled Document';
-    var content = (activeFile.id === null) ? editor.getValue() : mainContent;
+    var content = (activeFile.id === null && !activeFile.isAsset) ? editor.getValue() : mainContent;
     var xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/save.php', true);
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');

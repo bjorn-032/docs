@@ -1314,6 +1314,10 @@ body.settings-page .topbar { position: sticky; top: 0; }
     line-height: 1.6;
 }
 
+.git-pub-key-wrap {
+    position: relative;
+}
+
 .git-pub-key-box {
     width: 100%;
     box-sizing: border-box;
@@ -1327,6 +1331,28 @@ body.settings-page .topbar { position: sticky; top: 0; }
     resize: none;
     outline: none;
     line-height: 1.5;
+}
+
+.git-pub-key-blurred {
+    filter: blur(4px);
+    user-select: none;
+}
+
+.git-pub-key-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--grayText);
+    cursor: pointer;
+    border-radius: 6px;
+}
+
+.git-pub-key-overlay:hover {
+    color: var(--text);
 }
 
 .git-btn-row {
